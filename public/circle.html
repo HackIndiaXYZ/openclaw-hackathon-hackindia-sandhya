@@ -1,0 +1,744 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SafeGuard — Safety Circle</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.min.js"></script>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg:       #080a0f;
+  --s1:       #0d1117;
+  --s2:       #131922;
+  --s3:       #1a2233;
+  --border:   rgba(255,255,255,0.06);
+  --border2:  rgba(255,255,255,0.12);
+  --text:     #c9d1d9;
+  --muted:    #4a5568;
+  --green:    #3fb950;
+  --red:      #f85149;
+  --amber:    #d29922;
+  --blue:     #58a6ff;
+  --purple:   #bc8cff;
+  --mono:     'IBM Plex Mono', monospace;
+  --sans:     'Plus Jakarta Sans', sans-serif;
+}
+
+html, body { height: 100%; font-family: var(--sans); background: var(--bg); color: var(--text); overflow: hidden; }
+
+/* ─── Layout ─── */
+.app { display: grid; grid-template-rows: 54px 1fr; height: 100vh; }
+
+/* ─── Header ─── */
+header {
+  display: flex; align-items: center; gap: 16px; padding: 0 24px;
+  background: var(--s1); border-bottom: 1px solid var(--border);
+  position: relative; z-index: 10;
+}
+.logo { display: flex; align-items: center; gap: 10px; margin-right: 8px; }
+.logo-icon {
+  width: 30px; height: 30px; border-radius: 8px; background: var(--red);
+  display: flex; align-items: center; justify-content: center; font-size: 15px;
+}
+.logo-name { font-size: 15px; font-weight: 800; color: #fff; }
+
+.circle-pill {
+  background: var(--s2); border: 1px solid var(--border2);
+  border-radius: 20px; padding: 5px 14px; font-size: 12px; color: var(--text);
+  display: flex; align-items: center; gap: 8px;
+}
+.circle-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); }
+
+.header-right { margin-left: auto; display: flex; align-items: center; gap: 10px; }
+.member-pill {
+  display: flex; align-items: center; gap: 8px;
+  background: var(--s2); border: 1px solid var(--border); border-radius: 20px;
+  padding: 5px 12px; font-size: 12px;
+}
+.avatar {
+  width: 22px; height: 22px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 10px; font-weight: 700; color: #fff; flex-shrink: 0;
+}
+.sos-trigger {
+  background: var(--red); color: #fff; border: none; border-radius: 8px;
+  padding: 7px 18px; font-weight: 800; font-size: 13px; cursor: pointer;
+  font-family: var(--sans); letter-spacing: 0.5px;
+  box-shadow: 0 0 24px rgba(248,81,73,0.4); transition: all 0.2s;
+}
+.sos-trigger:hover { box-shadow: 0 0 32px rgba(248,81,73,0.6); transform: scale(1.03); }
+.sos-trigger.active { background: #555; box-shadow: none; }
+
+/* ─── Main grid ─── */
+.main { display: grid; grid-template-columns: 320px 1fr 300px; overflow: hidden; }
+
+/* ─── Panel base ─── */
+.panel { display: flex; flex-direction: column; overflow: hidden; border-right: 1px solid var(--border); }
+.panel-header {
+  padding: 16px 20px; border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: space-between; flex-shrink: 0;
+}
+.panel-title { font-size: 11px; font-weight: 600; color: var(--muted); letter-spacing: 1.5px; text-transform: uppercase; font-family: var(--mono); }
+.panel-body { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 10px; }
+
+/* ─── Member cards ─── */
+.member-card {
+  background: var(--s2); border: 1px solid var(--border); border-radius: 14px;
+  padding: 14px; display: flex; align-items: center; gap: 12px;
+  transition: border-color 0.2s;
+}
+.member-card:hover { border-color: var(--border2); }
+.member-card.you { border-color: rgba(88,166,255,0.3); background: rgba(88,166,255,0.04); }
+.member-avatar-wrap { position: relative; flex-shrink: 0; }
+.member-avatar {
+  width: 40px; height: 40px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 14px; font-weight: 700; color: #fff;
+}
+.status-dot {
+  position: absolute; bottom: 0; right: 0;
+  width: 10px; height: 10px; border-radius: 50%;
+  border: 2px solid var(--s2);
+}
+.status-dot.online  { background: var(--green); }
+.status-dot.away    { background: var(--amber); }
+.status-dot.offline { background: var(--muted); }
+
+.member-info { flex: 1; min-width: 0; }
+.member-name { font-size: 13px; font-weight: 600; color: #fff; margin-bottom: 3px; }
+.member-meta { font-size: 11px; color: var(--muted); display: flex; align-items: center; gap: 8px; }
+.member-dist { font-family: var(--mono); font-size: 11px; color: var(--blue); }
+.member-rating { color: var(--amber); font-size: 11px; font-family: var(--mono); }
+.member-responses { font-size: 11px; color: var(--muted); font-family: var(--mono); }
+
+/* ─── Center: SOS Alert area ─── */
+.center-panel { display: flex; flex-direction: column; overflow: hidden; background: var(--bg); }
+
+.no-alert {
+  flex: 1; display: flex; flex-direction: column; align-items: center;
+  justify-content: center; gap: 20px; padding: 40px;
+}
+.no-alert-icon {
+  width: 80px; height: 80px; border-radius: 50%;
+  background: rgba(63,185,80,0.1); border: 2px solid rgba(63,185,80,0.3);
+  display: flex; align-items: center; justify-content: center; font-size: 36px;
+}
+.no-alert-title { font-size: 20px; font-weight: 700; color: #fff; }
+.no-alert-sub   { font-size: 14px; color: var(--muted); text-align: center; line-height: 1.6; }
+
+/* SOS Alert card */
+.sos-alert-card {
+  margin: 20px; border-radius: 20px; overflow: hidden;
+  border: 1px solid rgba(248,81,73,0.4);
+  background: linear-gradient(135deg, rgba(248,81,73,0.08) 0%, rgba(248,81,73,0.02) 100%);
+  animation: alert-in 0.4s cubic-bezier(0.34,1.56,0.64,1);
+}
+@keyframes alert-in { from { transform: scale(0.92) translateY(-20px); opacity: 0; } }
+
+.alert-top {
+  padding: 20px 24px; display: flex; align-items: center; gap: 16px;
+  border-bottom: 1px solid rgba(248,81,73,0.2);
+}
+.alert-pulse {
+  width: 52px; height: 52px; border-radius: 50%; background: var(--red);
+  display: flex; align-items: center; justify-content: center; font-size: 22px;
+  position: relative; flex-shrink: 0;
+}
+.alert-pulse::before, .alert-pulse::after {
+  content: ''; position: absolute; inset: 0; border-radius: 50%;
+  border: 2px solid var(--red); animation: ripple 1.8s ease-out infinite;
+}
+.alert-pulse::after { animation-delay: 0.9s; }
+@keyframes ripple { 0% { transform: scale(1); opacity: 0.8; } 100% { transform: scale(2.4); opacity: 0; } }
+
+.alert-info { flex: 1; }
+.alert-name { font-size: 20px; font-weight: 800; color: #fff; margin-bottom: 4px; }
+.alert-time { font-size: 12px; color: var(--red); font-family: var(--mono); }
+.alert-status { font-size: 11px; color: var(--muted); margin-top: 4px; }
+
+/* Alert body */
+.alert-body { padding: 20px 24px; display: flex; flex-direction: column; gap: 16px; }
+
+.alert-location {
+  background: var(--s2); border: 1px solid var(--border); border-radius: 12px; padding: 14px;
+  display: flex; align-items: center; gap: 12px;
+}
+.alert-location .icon { font-size: 24px; }
+.alert-location .loc-text { flex: 1; }
+.alert-location .loc-label { font-size: 11px; color: var(--muted); font-family: var(--mono); margin-bottom: 3px; }
+.alert-location .loc-coords { font-family: var(--mono); font-size: 13px; color: var(--blue); }
+.alert-location .loc-link {
+  font-size: 11px; color: var(--green); text-decoration: none;
+  border: 1px solid rgba(63,185,80,0.3); border-radius: 6px; padding: 4px 8px;
+  white-space: nowrap;
+}
+.alert-location .loc-link:hover { background: rgba(63,185,80,0.08); }
+
+/* Response buttons */
+.response-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.resp-btn {
+  border: none; border-radius: 12px; padding: 14px 12px; cursor: pointer;
+  font-family: var(--sans); font-weight: 700; font-size: 13px;
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+  transition: all 0.2s; text-align: center;
+}
+.resp-btn .btn-icon { font-size: 22px; }
+.resp-btn.going   { background: var(--green); color: #000; box-shadow: 0 4px 20px rgba(63,185,80,0.3); }
+.resp-btn.police  { background: #1f6feb; color: #fff; box-shadow: 0 4px 20px rgba(31,111,235,0.3); }
+.resp-btn.checkin { background: var(--s3); color: var(--text); border: 1px solid var(--border2); }
+.resp-btn.safe    { background: var(--s3); color: var(--muted); border: 1px solid var(--border); }
+.resp-btn:hover { transform: translateY(-2px); filter: brightness(1.1); }
+.resp-btn.selected { ring: 2px solid #fff; opacity: 0.7; transform: none; }
+
+/* Responders list */
+.responders-section { border-top: 1px solid rgba(248,81,73,0.15); padding: 16px 24px; }
+.resp-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+.resp-title { font-size: 11px; font-family: var(--mono); color: var(--muted); letter-spacing: 1px; text-transform: uppercase; }
+.resp-count { font-size: 13px; font-weight: 700; color: var(--green); font-family: var(--mono); }
+.responders-list { display: flex; flex-direction: column; gap: 8px; max-height: 200px; overflow-y: auto; }
+.responder-row {
+  display: flex; align-items: center; gap: 10px;
+  background: var(--s2); border-radius: 10px; padding: 10px 12px;
+  animation: slide-in 0.3s ease;
+}
+@keyframes slide-in { from { opacity: 0; transform: translateX(-8px); } }
+.responder-action {
+  font-size: 10px; font-family: var(--mono); padding: 3px 8px; border-radius: 6px; margin-left: auto;
+}
+.action-coming   { background: rgba(63,185,80,0.15);  color: var(--green); }
+.action-police   { background: rgba(31,111,235,0.15); color: var(--blue); }
+.action-checkin  { background: rgba(210,153,34,0.15); color: var(--amber); }
+.action-unavail  { background: rgba(74,85,104,0.2);   color: var(--muted); }
+
+/* ─── Right panel: Activity feed ─── */
+.feed-item {
+  background: var(--s2); border: 1px solid var(--border); border-radius: 12px;
+  padding: 12px 14px; animation: feed-in 0.3s ease;
+}
+@keyframes feed-in { from { opacity: 0; transform: translateY(-6px); } }
+.feed-time { font-size: 10px; color: var(--muted); font-family: var(--mono); margin-bottom: 4px; }
+.feed-text { font-size: 12px; color: var(--text); line-height: 1.5; }
+.feed-highlight { color: #fff; font-weight: 600; }
+.feed-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 6px; }
+
+/* Stats row */
+.stats-row {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
+  padding: 16px; border-bottom: 1px solid var(--border); flex-shrink: 0;
+}
+.stat-card { background: var(--s2); border: 1px solid var(--border); border-radius: 12px; padding: 12px; }
+.stat-val  { font-size: 22px; font-weight: 800; font-family: var(--mono); }
+.stat-key  { font-size: 10px; color: var(--muted); margin-top: 2px; letter-spacing: 0.5px; }
+
+/* Demo control */
+.demo-bar {
+  padding: 12px 20px; background: rgba(88,166,255,0.06);
+  border-top: 1px solid rgba(88,166,255,0.15);
+  display: flex; align-items: center; gap: 10px; flex-shrink: 0;
+}
+.demo-label { font-size: 11px; color: var(--blue); font-family: var(--mono); }
+.demo-btn {
+  background: rgba(88,166,255,0.12); border: 1px solid rgba(88,166,255,0.3);
+  color: var(--blue); border-radius: 8px; padding: 6px 12px; font-size: 11px;
+  cursor: pointer; font-family: var(--mono); transition: all 0.15s;
+}
+.demo-btn:hover { background: rgba(88,166,255,0.2); }
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-thumb { background: #1e2a3a; border-radius: 2px; }
+
+/* Avatar colors */
+.av-0 { background: #e85d04; }
+.av-1 { background: #7209b7; }
+.av-2 { background: #0077b6; }
+.av-3 { background: #2d6a4f; }
+.av-4 { background: #c9184a; }
+.av-5 { background: #5e503f; }
+.av-6 { background: #3a86ff; }
+.av-7 { background: #6d6875; }
+</style>
+</head>
+<body>
+<div class="app">
+
+<!-- ─── Header ─── -->
+<header>
+  <div class="logo">
+    <div class="logo-icon">🛡</div>
+    <div class="logo-name">SafeGuard</div>
+  </div>
+  <div class="circle-pill">
+    <div class="circle-dot"></div>
+    <span id="circleName">Koramangala Women's Circle</span>
+  </div>
+  <div class="header-right">
+    <div class="member-pill">
+      <div class="avatar av-0" style="width:22px;height:22px;font-size:10px;">P</div>
+      <span>You: Priya S.</span>
+    </div>
+    <button class="sos-trigger" id="sosTriggerBtn" onclick="triggerMySOSDemo()">🚨 SOS</button>
+  </div>
+</header>
+
+<!-- ─── Main ─── -->
+<div class="main">
+
+  <!-- LEFT: Circle members -->
+  <div class="panel">
+    <div class="panel-header">
+      <span class="panel-title">Circle Members</span>
+      <span id="onlineCount" style="font-size:12px;color:var(--green);font-family:var(--mono);">— online</span>
+    </div>
+    <div class="panel-body" id="membersList"></div>
+  </div>
+
+  <!-- CENTER: Alert area -->
+  <div class="center-panel" id="centerPanel">
+    <div class="no-alert" id="noAlertState">
+      <div class="no-alert-icon">🛡</div>
+      <div class="no-alert-title">Circle is Active</div>
+      <div class="no-alert-sub">
+        All members are safe right now.<br>
+        When any member triggers SOS, you'll be alerted here instantly.
+      </div>
+      <div style="margin-top:8px;text-align:center;">
+        <div style="font-size:11px;color:var(--muted);font-family:var(--mono);margin-bottom:12px;">SIMULATE AN ALERT</div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:center;">
+          <button class="demo-btn" onclick="simulateAlert('Anjali R.', 12.9361, 77.6252)">📍 Anjali triggers SOS</button>
+          <button class="demo-btn" onclick="simulateAlert('Sneha K.', 12.9340, 77.6230)">📍 Sneha triggers SOS</button>
+          <button class="demo-btn" onclick="simulateAlert('Kavya T.', 12.9330, 77.6270)">📍 Kavya triggers SOS</button>
+        </div>
+      </div>
+    </div>
+    <div id="alertState" style="display:none;flex:1;overflow-y:auto;"></div>
+  </div>
+
+  <!-- RIGHT: Activity feed -->
+  <div class="panel" style="border-right:none;">
+    <div class="stats-row">
+      <div class="stat-card">
+        <div class="stat-val" id="statMembers" style="color:var(--blue);">8</div>
+        <div class="stat-key">CIRCLE MEMBERS</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-val" id="statResponded" style="color:var(--green);">63</div>
+        <div class="stat-key">TOTAL RESPONSES</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-val" id="statAlerts" style="color:var(--amber);">0</div>
+        <div class="stat-key">ACTIVE ALERTS</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-val" id="statAvgTime" style="color:var(--purple);">3.2m</div>
+        <div class="stat-key">AVG RESPONSE</div>
+      </div>
+    </div>
+    <div class="panel-header" style="padding:12px 20px;">
+      <span class="panel-title">Live Activity</span>
+    </div>
+    <div class="panel-body" id="activityFeed">
+      <div class="feed-item">
+        <div class="feed-time">Just now</div>
+        <div class="feed-text"><span class="feed-dot" style="background:var(--green)"></span>Circle is active — 6 members online</div>
+      </div>
+      <div class="feed-item">
+        <div class="feed-time">2 min ago</div>
+        <div class="feed-text"><span class="feed-dot" style="background:var(--blue)"></span><span class="feed-highlight">Pooja N.</span> joined the circle</div>
+      </div>
+      <div class="feed-item">
+        <div class="feed-time">1 hour ago</div>
+        <div class="feed-text"><span class="feed-dot" style="background:var(--green)"></span><span class="feed-highlight">Meera P.</span> marked safe after alert</div>
+      </div>
+      <div class="feed-item">
+        <div class="feed-time">Yesterday</div>
+        <div class="feed-text"><span class="feed-dot" style="background:var(--amber)"></span><span class="feed-highlight">Anjali R.</span> responded to SOS — arrived in 4 min</div>
+      </div>
+      <div class="feed-item">
+        <div class="feed-time">Yesterday</div>
+        <div class="feed-text"><span class="feed-dot" style="background:var(--green)"></span>Circle prevented incident near BTM Layout</div>
+      </div>
+    </div>
+    <div class="demo-bar">
+      <span class="demo-label">🔧 DEMO</span>
+      <button class="demo-btn" onclick="resetDemo()">Reset</button>
+      <button class="demo-btn" onclick="autoPlayDemo()">▶ Auto-play</button>
+    </div>
+  </div>
+
+</div>
+</div>
+
+<script>
+const API = 'http://localhost:3001';
+
+// ─── State ────────────────────────────────────────────────────────────────────
+const ME = { userId:'m1', name:'Priya S.', lat:12.9352, lng:77.6245 };
+
+const MEMBERS = [
+  { userId:'m1', name:'Priya S.',  status:'online',  rating:4.9, respondedCount:12, distKm:0.00, lat:12.9352, lng:77.6245, isMe:true },
+  { userId:'m2', name:'Anjali R.', status:'online',  rating:4.8, respondedCount:8,  distKm:0.12, lat:12.9361, lng:77.6252 },
+  { userId:'m3', name:'Sneha K.',  status:'online',  rating:5.0, respondedCount:15, distKm:0.18, lat:12.9340, lng:77.6230 },
+  { userId:'m4', name:'Divya M.',  status:'away',    rating:4.7, respondedCount:6,  distKm:0.25, lat:12.9370, lng:77.6260 },
+  { userId:'m5', name:'Kavya T.',  status:'online',  rating:4.9, respondedCount:20, distKm:0.29, lat:12.9330, lng:77.6270 },
+  { userId:'m6', name:'Meera P.',  status:'offline', rating:4.6, respondedCount:4,  distKm:0.41, lat:12.9380, lng:77.6210 },
+  { userId:'m7', name:'Riya B.',   status:'online',  rating:4.8, respondedCount:9,  distKm:0.35, lat:12.9345, lng:77.6280 },
+  { userId:'m8', name:'Pooja N.',  status:'online',  rating:5.0, respondedCount:18, distKm:0.20, lat:12.9360, lng:77.6220 },
+];
+
+let currentAlert = null;
+let myResponse   = null;
+let alertTimerInterval = null;
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+function haversineKm(a, b) {
+  const R=6371, dLat=(b.lat-a.lat)*Math.PI/180, dLng=(b.lng-a.lng)*Math.PI/180;
+  const x=Math.sin(dLat/2)**2+Math.cos(a.lat*Math.PI/180)*Math.cos(b.lat*Math.PI/180)*Math.sin(dLng/2)**2;
+  return R*2*Math.atan2(Math.sqrt(x),Math.sqrt(1-x));
+}
+function fmtDist(km) {
+  return km < 1 ? `${Math.round(km*1000)}m` : `${km.toFixed(1)}km`;
+}
+function etaMinutes(km) { return Math.max(1, Math.round(km/5*60)); } // ~5km/h walking
+function timeNow() {
+  const d=new Date(); return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}:${String(d.getSeconds()).padStart(2,'0')}`;
+}
+function initials(name) { return name.split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2); }
+
+// ─── Render members ───────────────────────────────────────────────────────────
+function renderMembers() {
+  const list = document.getElementById('membersList');
+  const online = MEMBERS.filter(m => m.status !== 'offline').length;
+  document.getElementById('onlineCount').textContent = `${online} online`;
+
+  list.innerHTML = '';
+  MEMBERS.forEach((m, i) => {
+    const card = document.createElement('div');
+    card.className = 'member-card' + (m.isMe ? ' you' : '');
+    card.id = 'member-' + m.userId;
+
+    const distStr = m.isMe ? 'You' : fmtDist(m.distKm);
+    const etaStr  = m.isMe ? '' : `· ${etaMinutes(m.distKm)} min away`;
+
+    card.innerHTML = `
+      <div class="member-avatar-wrap">
+        <div class="member-avatar av-${i % 8}">${initials(m.name)}</div>
+        <div class="status-dot ${m.status}"></div>
+      </div>
+      <div class="member-info">
+        <div class="member-name">${m.name}${m.isMe ? ' (You)' : ''}</div>
+        <div class="member-meta">
+          <span class="member-dist">${distStr} ${etaStr}</span>
+          <span class="member-rating">★ ${m.rating}</span>
+        </div>
+        <div class="member-responses" style="margin-top:3px;">${m.respondedCount} responses · ${m.status}</div>
+      </div>
+    `;
+    list.appendChild(card);
+  });
+}
+
+// ─── Render SOS Alert ─────────────────────────────────────────────────────────
+function renderAlert(alert) {
+  document.getElementById('noAlertState').style.display = 'none';
+  document.getElementById('alertState').style.display = 'block';
+  document.getElementById('statAlerts').textContent = '1';
+
+  // Find nearby members sorted by distance to alert
+  const sortedMembers = MEMBERS
+    .filter(m => !m.isMe && m.status !== 'offline')
+    .map(m => ({
+      ...m,
+      distToAlert: haversineKm(m, alert),
+      etaToAlert: etaMinutes(haversineKm(m, alert)),
+    }))
+    .sort((a,b) => a.distToAlert - b.distToAlert);
+
+  const alertEl = document.getElementById('alertState');
+  alertEl.innerHTML = `
+    <div class="sos-alert-card">
+      <!-- Alert top -->
+      <div class="alert-top">
+        <div class="alert-pulse">🚨</div>
+        <div class="alert-info">
+          <div class="alert-name">${alert.userName} needs help!</div>
+          <div class="alert-time">🔴 LIVE · ${timeNow()} · Alert active</div>
+          <div class="alert-status" id="alertSubStatus">Contacting ${sortedMembers.length} nearby members...</div>
+        </div>
+      </div>
+
+      <!-- Body -->
+      <div class="alert-body">
+
+        <!-- Location -->
+        <div class="alert-location">
+          <div class="icon">📍</div>
+          <div class="loc-text">
+            <div class="loc-label">LAST KNOWN LOCATION</div>
+            <div class="loc-coords">${alert.lat.toFixed(5)}, ${alert.lng.toFixed(5)}</div>
+          </div>
+          <a class="loc-link" href="https://maps.google.com/?q=${alert.lat},${alert.lng}" target="_blank">↗ Maps</a>
+        </div>
+
+        <!-- Nearby members ETA -->
+        <div style="background:var(--s2);border:1px solid var(--border);border-radius:12px;padding:14px;">
+          <div style="font-size:10px;color:var(--muted);font-family:var(--mono);letter-spacing:1px;margin-bottom:10px;">NEAREST CIRCLE MEMBERS</div>
+          ${sortedMembers.slice(0,4).map((m,i) => `
+            <div style="display:flex;align-items:center;gap:10px;${i>0?'margin-top:8px;padding-top:8px;border-top:1px solid var(--border)':''}">
+              <div class="avatar av-${(MEMBERS.findIndex(x=>x.userId===m.userId))%8}" style="width:30px;height:30px;font-size:11px;flex-shrink:0;">${initials(m.name)}</div>
+              <div style="flex:1;">
+                <div style="font-size:13px;font-weight:600;color:#fff;">${m.name}</div>
+                <div style="font-size:11px;color:var(--muted);">${fmtDist(m.distToAlert)} away</div>
+              </div>
+              <div style="text-align:right;">
+                <div style="font-size:14px;font-weight:800;color:var(--green);font-family:var(--mono);">~${m.etaToAlert} min</div>
+                <div style="font-size:10px;color:var(--muted);">ETA</div>
+              </div>
+            </div>
+          `).join('')}
+        </div>
+
+        <!-- Your response -->
+        <div>
+          <div style="font-size:11px;color:var(--muted);font-family:var(--mono);letter-spacing:1px;margin-bottom:10px;">YOUR RESPONSE</div>
+          <div class="response-grid">
+            <button class="resp-btn going" id="resp-going" onclick="respond('coming')">
+              <span class="btn-icon">🏃‍♀️</span>
+              I'm on my way
+            </button>
+            <button class="resp-btn police" id="resp-police" onclick="respond('called_police')">
+              <span class="btn-icon">🚔</span>
+              Calling police
+            </button>
+            <button class="resp-btn checkin" id="resp-checkin" onclick="respond('checking_in')">
+              <span class="btn-icon">📞</span>
+              Calling her now
+            </button>
+            <button class="resp-btn safe" id="resp-unavail" onclick="respond('unavailable')">
+              <span class="btn-icon">✗</span>
+              Can't help now
+            </button>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Responders -->
+      <div class="responders-section">
+        <div class="resp-header">
+          <span class="resp-title">Responses</span>
+          <span class="resp-count" id="respCount">0 coming</span>
+        </div>
+        <div class="responders-list" id="respondersList">
+          <div style="font-size:12px;color:var(--muted);text-align:center;padding:12px 0;">Waiting for responses...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Safe button -->
+    <div style="text-align:center;padding:16px;">
+      <button onclick="resolveAlert()" style="background:var(--green);color:#000;border:none;border-radius:10px;padding:12px 32px;font-weight:800;font-size:14px;cursor:pointer;font-family:var(--sans);">
+        ✓ Mark as Safe — SOS Resolved
+      </button>
+    </div>
+  `;
+}
+
+// ─── Core actions ─────────────────────────────────────────────────────────────
+function respond(action) {
+  if (!currentAlert) return;
+  myResponse = action;
+
+  // Highlight selected button
+  document.querySelectorAll('.resp-btn').forEach(b => b.classList.remove('selected'));
+  const btnMap = { coming:'resp-going', called_police:'resp-police', checking_in:'resp-checkin', unavailable:'resp-unavail' };
+  document.getElementById(btnMap[action])?.classList.add('selected');
+
+  const actionLabels = { coming:'🏃 On my way', called_police:'🚔 Called police', checking_in:'📞 Calling her', unavailable:'✗ Unavailable' };
+
+  addResponder({
+    responderName: 'You (Priya S.)',
+    action,
+    label: actionLabels[action],
+    eta: action === 'coming' ? `~${etaMinutes(0)} min` : null,
+  });
+
+  addFeedItem('var(--blue)', `You responded: <span class="feed-highlight">${actionLabels[action]}</span>`);
+
+  // Try backend
+  fetch(`${API}/api/circle/sos/respond`, {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ alertId: currentAlert.alertId, responderId: ME.userId, responderName: ME.name, action }),
+  }).catch(() => {});
+}
+
+function addResponder(r) {
+  const list = document.getElementById('respondersList');
+  if (!list) return;
+
+  // Clear empty state
+  if (list.querySelector('[style*="Waiting"]')) list.innerHTML = '';
+
+  const actionClass = { coming:'action-coming', called_police:'action-police', checking_in:'action-checkin', unavailable:'action-unavail' };
+  const row = document.createElement('div');
+  row.className = 'responder-row';
+  row.innerHTML = `
+    <div class="avatar av-${Math.floor(Math.random()*8)}" style="width:28px;height:28px;font-size:10px;">${initials(r.responderName.split('(')[0].trim())}</div>
+    <div style="flex:1;">
+      <div style="font-size:13px;font-weight:600;color:#fff;">${r.responderName}</div>
+      ${r.eta ? `<div style="font-size:11px;color:var(--muted);font-family:var(--mono);">ETA: ${r.eta}</div>` : ''}
+    </div>
+    <span class="responder-action ${actionClass[r.action] || 'action-checkin'}">${r.label}</span>
+  `;
+  list.insertBefore(row, list.firstChild);
+
+  // Update coming count
+  const comingCount = list.querySelectorAll('.action-coming').length;
+  const countEl = document.getElementById('respCount');
+  if (countEl) countEl.textContent = `${comingCount} coming`;
+}
+
+function addFeedItem(color, text) {
+  const feed = document.getElementById('activityFeed');
+  const item = document.createElement('div');
+  item.className = 'feed-item';
+  item.innerHTML = `
+    <div class="feed-time">${timeNow()}</div>
+    <div class="feed-text"><span class="feed-dot" style="background:${color}"></span>${text}</div>
+  `;
+  feed.insertBefore(item, feed.firstChild);
+}
+
+// ─── Simulate SOS from another member ────────────────────────────────────────
+function simulateAlert(memberName, lat, lng) {
+  currentAlert = {
+    alertId: 'demo_' + Date.now(),
+    userName: memberName,
+    lat, lng,
+    ts: new Date().toISOString(),
+    responses: [],
+  };
+
+  renderAlert(currentAlert);
+  addFeedItem('var(--red)', `<span class="feed-highlight">${memberName}</span> triggered SOS! 🚨`);
+
+  // Vibrate if supported
+  navigator.vibrate?.([200, 100, 200, 100, 500]);
+
+  // Simulate other members responding over time
+  const responders = MEMBERS.filter(m => !m.isMe && m.status !== 'offline').slice(0,4);
+  const respLabels = ['🏃 On my way','🚔 Called police','📞 Calling her','🏃 On my way'];
+  const respActions = ['coming','called_police','checking_in','coming'];
+
+  responders.forEach((m, i) => {
+    setTimeout(() => {
+      const dist = haversineKm(m, { lat, lng });
+      addResponder({
+        responderName: m.name,
+        action: respActions[i],
+        label: respLabels[i],
+        eta: respActions[i]==='coming' ? `~${etaMinutes(dist)} min` : null,
+      });
+      addFeedItem(
+        respActions[i]==='coming' ? 'var(--green)' : respActions[i]==='called_police' ? 'var(--blue)' : 'var(--amber)',
+        `<span class="feed-highlight">${m.name}</span>: ${respLabels[i]}`
+      );
+
+      // Update sub-status
+      const subStatus = document.getElementById('alertSubStatus');
+      if (subStatus && i === 0) subStatus.textContent = `${i+1} member responding — help is coming`;
+      if (subStatus && i === responders.length-1) subStatus.textContent = `${responders.length} members alerted · Police notified`;
+    }, (i+1) * 2000);
+  });
+}
+
+// ─── Trigger YOUR OWN SOS ─────────────────────────────────────────────────────
+function triggerMySOSDemo() {
+  const btn = document.getElementById('sosTriggerBtn');
+  btn.classList.add('active');
+  btn.textContent = '✓ SOS SENT';
+  addFeedItem('var(--red)', 'You triggered SOS! Alerting circle members...');
+
+  fetch(`${API}/api/circle/sos/broadcast`, {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ userId:ME.userId, userName:ME.name, lat:ME.lat, lng:ME.lng }),
+  }).catch(() => {});
+
+  setTimeout(() => { btn.classList.remove('active'); btn.textContent = '🚨 SOS'; }, 5000);
+}
+
+function resolveAlert() {
+  if (currentAlert) {
+    fetch(`${API}/api/circle/sos/resolve`, {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ alertId: currentAlert.alertId, userId: ME.userId }),
+    }).catch(() => {});
+  }
+
+  currentAlert = null; myResponse = null;
+  clearInterval(alertTimerInterval);
+  document.getElementById('noAlertState').style.display = 'flex';
+  document.getElementById('alertState').style.display = 'none';
+  document.getElementById('alertState').innerHTML = '';
+  document.getElementById('statAlerts').textContent = '0';
+  addFeedItem('var(--green)', 'SOS resolved — member confirmed safe ✓');
+}
+
+function resetDemo() {
+  resolveAlert();
+  document.getElementById('activityFeed').innerHTML = `
+    <div class="feed-item">
+      <div class="feed-time">${timeNow()}</div>
+      <div class="feed-text"><span class="feed-dot" style="background:var(--green)"></span>Demo reset — circle active</div>
+    </div>
+  `;
+}
+
+// ─── Auto-play for judges ─────────────────────────────────────────────────────
+async function autoPlayDemo() {
+  resetDemo();
+  await new Promise(r => setTimeout(r, 500));
+  simulateAlert('Anjali R.', 12.9361, 77.6252);
+  await new Promise(r => setTimeout(r, 6000));
+  respond('coming');
+  await new Promise(r => setTimeout(r, 4000));
+  addFeedItem('var(--purple)', 'Police notified via helpline 1091');
+  await new Promise(r => setTimeout(r, 5000));
+  resolveAlert();
+}
+
+// ─── WebSocket ────────────────────────────────────────────────────────────────
+try {
+  const socket = io(API, { transports: ['websocket'] });
+  socket.on('connect', () => {
+    socket.emit('join', { circleId: 'circle_korm_001', userId: ME.userId });
+    addFeedItem('var(--green)', 'Connected to SafeGuard network');
+  });
+  socket.on('circle:sos_alert', (alert) => {
+    if (alert.userId !== ME.userId) {
+      currentAlert = alert;
+      renderAlert(alert);
+      addFeedItem('var(--red)', `🚨 <span class="feed-highlight">${alert.userName}</span> triggered SOS!`);
+      navigator.vibrate?.([200,100,200,100,500]);
+    }
+  });
+  socket.on('circle:sos_response', ({ response, totalResponders }) => {
+    addResponder({ ...response, label: response.action });
+  });
+  socket.on('circle:sos_resolved', () => {
+    resolveAlert();
+  });
+  socket.on('disconnect', () => {
+    addFeedItem('var(--muted)', 'Network disconnected — reconnecting...');
+  });
+} catch(e) { /* backend offline */ }
+
+// ─── Init ─────────────────────────────────────────────────────────────────────
+renderMembers();
+</script>
+</body>
+</html>

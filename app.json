@@ -1,0 +1,45 @@
+{
+  "expo": {
+    "name": "SafeGuard SOS",
+    "slug": "safeguard-sos",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "splash": {
+      "backgroundColor": "#0d0d0d"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#FF1744"
+      },
+      "permissions": [
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION",
+        "RECORD_AUDIO",
+        "SEND_SMS",
+        "VIBRATE",
+        "RECEIVE_BOOT_COMPLETED"
+      ],
+      "package": "com.safeguard.sos"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "Used to share your location during an SOS emergency.",
+        "NSLocationAlwaysUsageDescription": "Used to track location during an active SOS alert.",
+        "NSMicrophoneUsageDescription": "Used to record audio evidence during an SOS emergency.",
+        "NSMotionUsageDescription": "Used to detect shake gesture for SOS activation."
+      }
+    },
+    "plugins": [
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "SafeGuard needs location access to share your position during an SOS emergency."
+        }
+      ]
+    ]
+  }
+}

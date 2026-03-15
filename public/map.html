@@ -1,0 +1,1136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SafeGuard — Safety Map</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg:        #07090d;
+  --surface:   #0e1117;
+  --surface2:  #161b26;
+  --border:    rgba(255,255,255,0.06);
+  --border2:   rgba(255,255,255,0.12);
+  --text:      #d4dce8;
+  --muted:     #4a5568;
+  --accent:    #3b82f6;
+  --green:     #10b981;
+  --amber:     #f59e0b;
+  --red:       #ef4444;
+  --red-dim:   rgba(239,68,68,0.12);
+  --green-dim: rgba(16,185,129,0.12);
+  --mono:      'DM Mono', monospace;
+  --sans:      'Outfit', sans-serif;
+}
+
+html, body { height: 100%; font-family: var(--sans); background: var(--bg); color: var(--text); overflow: hidden; }
+
+/* ─── Layout ─── */
+.app { display: grid; grid-template-rows: 56px 1fr; height: 100vh; }
+
+/* ─── Nav ─── */
+nav {
+  display: flex; align-items: center; gap: 20px;
+  padding: 0 24px; border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+.logo { display: flex; align-items: center; gap: 10px; }
+.logo-mark {
+  width: 28px; height: 28px; background: var(--red);
+  border-radius: 6px; display: flex; align-items: center; justify-content: center;
+  font-size: 14px;
+}
+.logo-text { font-size: 15px; font-weight: 700; color: #fff; letter-spacing: -0.3px; }
+.logo-sub  { font-size: 11px; color: var(--muted); font-family: var(--mono); }
+
+.nav-tabs { display: flex; gap: 4px; margin-left: 24px; }
+.tab {
+  padding: 6px 14px; border-radius: 8px; font-size: 13px; font-weight: 500;
+  cursor: pointer; border: none; background: transparent; color: var(--muted);
+  transition: all 0.15s;
+}
+.tab:hover { color: var(--text); background: var(--surface2); }
+.tab.active { color: #fff; background: var(--surface2); border: 1px solid var(--border2); }
+
+.nav-right { margin-left: auto; display: flex; align-items: center; gap: 12px; }
+.time-badge {
+  font-family: var(--mono); font-size: 11px; color: var(--muted);
+  background: var(--surface2); border: 1px solid var(--border);
+  padding: 4px 10px; border-radius: 6px;
+}
+.sos-btn {
+  background: var(--red); color: #fff; border: none; border-radius: 8px;
+  padding: 7px 16px; font-size: 13px; font-weight: 700; cursor: pointer;
+  font-family: var(--sans); letter-spacing: 0.5px;
+  box-shadow: 0 0 20px rgba(239,68,68,0.3);
+}
+
+/* ─── Main content ─── */
+.main { display: grid; grid-template-columns: 380px 1fr; overflow: hidden; }
+
+/* ─── Sidebar ─── */
+.sidebar {
+  background: var(--surface); border-right: 1px solid var(--border);
+  display: flex; flex-direction: column; overflow: hidden;
+}
+
+/* Panel switching */
+.panel { display: none; flex-direction: column; flex: 1; overflow: hidden; }
+.panel.active { display: flex; }
+
+/* ─── Route Panel ─── */
+.route-inputs { padding: 20px; border-bottom: 1px solid var(--border); display: flex; flex-direction: column; gap: 10px; }
+.input-group { display: flex; flex-direction: column; gap: 6px; }
+.input-label { font-size: 11px; color: var(--muted); font-family: var(--mono); letter-spacing: 0.8px; text-transform: uppercase; }
+.loc-input {
+  background: var(--surface2); border: 1px solid var(--border); border-radius: 10px;
+  padding: 10px 14px; color: var(--text); font-family: var(--sans); font-size: 13px;
+  outline: none; transition: border-color 0.15s;
+}
+.loc-input:focus { border-color: var(--accent); }
+.loc-input::placeholder { color: var(--muted); }
+
+.route-time-row { display: flex; gap: 10px; align-items: flex-end; }
+.route-time-row .input-group { flex: 1; }
+.find-btn {
+  background: var(--accent); color: #fff; border: none; border-radius: 10px;
+  padding: 10px 20px; font-size: 13px; font-weight: 600; cursor: pointer;
+  font-family: var(--sans); transition: filter 0.15s; white-space: nowrap;
+}
+.find-btn:hover { filter: brightness(1.1); }
+
+/* Route cards */
+.routes-list { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+
+.route-card {
+  background: var(--surface2); border: 1px solid var(--border);
+  border-radius: 14px; padding: 16px; cursor: pointer;
+  transition: border-color 0.2s, transform 0.15s;
+  position: relative; overflow: hidden;
+}
+.route-card:hover { border-color: var(--border2); transform: translateY(-1px); }
+.route-card.recommended { border-color: rgba(16,185,129,0.4); }
+.route-card.selected { border-color: var(--accent); }
+
+.route-badge {
+  position: absolute; top: 0; right: 0;
+  background: var(--green); color: #000; font-size: 10px; font-weight: 700;
+  padding: 4px 10px; border-radius: 0 14px 0 10px; letter-spacing: 0.5px;
+}
+.route-badge.avoid { background: var(--red); color: #fff; }
+
+.route-header { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 12px; }
+.route-letter {
+  width: 36px; height: 36px; border-radius: 8px; background: var(--bg);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 16px; font-weight: 800; flex-shrink: 0; font-family: var(--mono);
+}
+.route-letter.A { color: var(--green); }
+.route-letter.B { color: var(--red); }
+.route-letter.C { color: var(--amber); }
+
+.route-name { font-size: 14px; font-weight: 600; color: #fff; margin-bottom: 2px; }
+.route-desc { font-size: 12px; color: var(--muted); }
+
+.route-meta { display: flex; gap: 16px; margin-bottom: 12px; }
+.meta-item { display: flex; flex-direction: column; gap: 2px; }
+.meta-val { font-size: 15px; font-weight: 700; color: #fff; font-family: var(--mono); }
+.meta-key { font-size: 10px; color: var(--muted); letter-spacing: 0.5px; }
+
+/* Safety score bar */
+.score-bar-wrap { margin-bottom: 10px; }
+.score-bar-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+.score-label { font-size: 11px; color: var(--muted); }
+.score-val { font-size: 13px; font-weight: 700; font-family: var(--mono); }
+.score-bar { height: 6px; background: var(--bg); border-radius: 3px; overflow: hidden; }
+.score-fill { height: 100%; border-radius: 3px; transition: width 0.8s ease; }
+
+.route-features { display: flex; gap: 6px; flex-wrap: wrap; }
+.feat-tag {
+  font-size: 10px; font-family: var(--mono); padding: 3px 8px; border-radius: 6px;
+  border: 1px solid var(--border); color: var(--muted);
+}
+.feat-tag.yes { color: var(--green); border-color: rgba(16,185,129,0.3); background: var(--green-dim); }
+.feat-tag.no  { color: var(--red);   border-color: rgba(239,68,68,0.3);  background: var(--red-dim); }
+
+/* ─── Report Panel ─── */
+.report-form { padding: 20px; flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 14px; }
+.form-section { display: flex; flex-direction: column; gap: 8px; }
+.form-label { font-size: 11px; color: var(--muted); font-family: var(--mono); letter-spacing: 0.8px; text-transform: uppercase; }
+.form-select, .form-textarea, .form-input {
+  background: var(--surface2); border: 1px solid var(--border); border-radius: 10px;
+  padding: 10px 14px; color: var(--text); font-family: var(--sans); font-size: 13px;
+  outline: none; transition: border-color 0.15s; width: 100%;
+}
+.form-select:focus, .form-textarea:focus, .form-input:focus { border-color: var(--accent); }
+.form-textarea { resize: vertical; min-height: 80px; }
+
+.incident-types { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.incident-type {
+  background: var(--surface2); border: 1px solid var(--border); border-radius: 10px;
+  padding: 10px; text-align: center; cursor: pointer; transition: all 0.15s;
+  font-size: 12px; color: var(--muted);
+}
+.incident-type:hover { border-color: var(--border2); color: var(--text); }
+.incident-type.selected { border-color: var(--red); color: var(--red); background: var(--red-dim); }
+.incident-type .type-icon { font-size: 20px; margin-bottom: 4px; }
+
+.severity-row { display: flex; gap: 8px; }
+.sev-btn {
+  flex: 1; background: var(--surface2); border: 1px solid var(--border);
+  border-radius: 8px; padding: 8px; text-align: center; cursor: pointer;
+  font-size: 11px; font-family: var(--mono); color: var(--muted); transition: all 0.15s;
+}
+.sev-btn.selected { border-color: var(--red); color: var(--red); background: var(--red-dim); }
+
+.submit-btn {
+  background: var(--red); color: #fff; border: none; border-radius: 10px;
+  padding: 12px; font-size: 14px; font-weight: 700; cursor: pointer;
+  font-family: var(--sans); transition: filter 0.15s; width: 100%;
+}
+.submit-btn:hover { filter: brightness(1.1); }
+.anonymous-note { font-size: 11px; color: var(--muted); text-align: center; font-family: var(--mono); }
+
+/* ─── Map Area ─── */
+.map-area { position: relative; background: #0a0c10; overflow: hidden; }
+
+canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+
+/* Legend */
+.map-legend {
+  position: absolute; top: 20px; right: 20px;
+  background: rgba(14,17,23,0.92); backdrop-filter: blur(10px);
+  border: 1px solid var(--border); border-radius: 14px; padding: 14px 18px;
+  display: flex; flex-direction: column; gap: 8px; min-width: 160px;
+}
+.legend-title { font-size: 10px; color: var(--muted); font-family: var(--mono); letter-spacing: 1px; text-transform: uppercase; margin-bottom: 4px; }
+.legend-item { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text); }
+.legend-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+
+/* Stats bar */
+.stats-bar {
+  position: absolute; bottom: 20px; left: 20px; right: 20px;
+  background: rgba(14,17,23,0.92); backdrop-filter: blur(10px);
+  border: 1px solid var(--border); border-radius: 14px; padding: 12px 20px;
+  display: flex; gap: 32px; align-items: center;
+}
+.stat { display: flex; flex-direction: column; gap: 2px; }
+.stat-val { font-size: 18px; font-weight: 800; font-family: var(--mono); }
+.stat-key { font-size: 10px; color: var(--muted); letter-spacing: 0.5px; }
+
+/* Popup */
+.map-popup {
+  position: absolute; background: var(--surface);
+  border: 1px solid var(--border2); border-radius: 14px;
+  padding: 14px 18px; min-width: 200px; max-width: 260px;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.6); pointer-events: none;
+  opacity: 0; transition: opacity 0.2s; z-index: 10;
+}
+.map-popup.visible { opacity: 1; }
+.popup-type { font-size: 10px; color: var(--muted); font-family: var(--mono); letter-spacing: 1px; text-transform: uppercase; margin-bottom: 6px; }
+.popup-area { font-size: 15px; font-weight: 700; color: #fff; margin-bottom: 4px; }
+.popup-detail { font-size: 12px; color: var(--muted); }
+.popup-sev { display: inline-block; margin-top: 8px; font-size: 11px; padding: 3px 8px; border-radius: 6px; font-family: var(--mono); }
+
+/* Night mode overlay effect */
+.night-overlay {
+  position: absolute; inset: 0; pointer-events: none;
+  background: rgba(0,0,30,0.35); opacity: 0; transition: opacity 1s;
+}
+.night-overlay.active { opacity: 1; }
+
+/* Animations */
+@keyframes fade-up { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+.route-card { animation: fade-up 0.3s ease forwards; }
+.route-card:nth-child(2) { animation-delay: 0.05s; }
+.route-card:nth-child(3) { animation-delay: 0.1s; }
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #2a2a2a; border-radius: 2px; }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- Nav -->
+  <nav>
+    <div class="logo">
+      <div class="logo-mark">🛡</div>
+      <div>
+        <div class="logo-text">SafeGuard</div>
+        <div class="logo-sub">Safety Map — Bangalore</div>
+      </div>
+    </div>
+    <div class="nav-tabs">
+      <button class="tab active" onclick="switchPanel('route')">🗺 Route Finder</button>
+      <button class="tab" onclick="switchPanel('report')">⚠️ Report Incident</button>
+    </div>
+    <div class="nav-right">
+      <div class="time-badge" id="clockBadge">--:-- --</div>
+      <button class="sos-btn" onclick="alert('SOS triggered! (Day 1 feature)')">🚨 SOS</button>
+    </div>
+  </nav>
+
+  <div class="main">
+
+    <!-- ─── Sidebar ─── -->
+    <div class="sidebar">
+
+      <!-- Route Panel -->
+      <div class="panel active" id="panel-route">
+        <div class="route-inputs">
+          <div class="input-group">
+            <div class="input-label">From</div>
+            <input class="loc-input" id="fromInput" placeholder="Your location (e.g. Koramangala)" value="Koramangala, Bangalore">
+          </div>
+          <div class="input-group">
+            <div class="input-label">To</div>
+            <input class="loc-input" id="toInput" placeholder="Destination (e.g. Indiranagar)">
+          </div>
+          <div class="route-time-row">
+            <div class="input-group">
+              <div class="input-label">Travel Time</div>
+              <input class="loc-input" type="time" id="timeInput" value="22:00">
+            </div>
+            <button class="find-btn" onclick="findRoutes()">Find Safe Routes</button>
+          </div>
+        </div>
+        <div class="routes-list" id="routesList">
+          <div style="text-align:center;padding:40px 20px;color:var(--muted);font-size:13px;">
+            Enter a destination and tap<br>"Find Safe Routes" to see<br>safety-scored route options.
+          </div>
+        </div>
+      </div>
+
+      <!-- Report Panel -->
+      <div class="panel" id="panel-report">
+        <div class="report-form">
+          <div style="font-size:13px;color:var(--muted);line-height:1.6;padding:4px 0;">
+            Report anonymously. Your identity is never stored. Reports help other women avoid unsafe areas.
+          </div>
+
+          <div class="form-section">
+            <div class="form-label">Incident Type</div>
+            <div class="incident-types" id="incidentTypes">
+              <div class="incident-type selected" data-type="catcalling" onclick="selectType(this)">
+                <div class="type-icon">📢</div>Catcalling
+              </div>
+              <div class="incident-type" data-type="stalking" onclick="selectType(this)">
+                <div class="type-icon">👁</div>Stalking / Following
+              </div>
+              <div class="incident-type" data-type="groping" onclick="selectType(this)">
+                <div class="type-icon">🚫</div>Groping / Touch
+              </div>
+              <div class="incident-type" data-type="assault" onclick="selectType(this)">
+                <div class="type-icon">🆘</div>Assault / Attack
+              </div>
+              <div class="incident-type" data-type="exposure" onclick="selectType(this)">
+                <div class="type-icon">⚠️</div>Indecent Exposure
+              </div>
+              <div class="incident-type" data-type="other" onclick="selectType(this)">
+                <div class="type-icon">📝</div>Other
+              </div>
+            </div>
+          </div>
+
+          <div class="form-section">
+            <div class="form-label">Severity</div>
+            <div class="severity-row">
+              <button class="sev-btn" data-sev="1" onclick="selectSev(this)">1 — Mild</button>
+              <button class="sev-btn selected" data-sev="2" onclick="selectSev(this)">2 — Moderate</button>
+              <button class="sev-btn" data-sev="3" onclick="selectSev(this)">3 — Serious</button>
+              <button class="sev-btn" data-sev="4" onclick="selectSev(this)">4 — Severe</button>
+            </div>
+          </div>
+
+          <div class="form-section">
+            <div class="form-label">Area / Location</div>
+            <input class="form-input" id="reportArea" placeholder="e.g. Koramangala 5th Block, near Forum Mall">
+          </div>
+
+          <div class="form-section">
+            <div class="form-label">Time of Incident</div>
+            <input class="form-input" type="time" id="reportTime" value="22:00">
+          </div>
+
+          <div class="form-section">
+            <div class="form-label">Description (optional)</div>
+            <textarea class="form-textarea" id="reportDesc" placeholder="Any details that might help others (no personal info needed)..."></textarea>
+          </div>
+
+          <button class="submit-btn" onclick="submitReport()">Submit Anonymous Report</button>
+          <div class="anonymous-note">🔒 Your location & identity are never stored</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ─── Map ─── -->
+    <div class="map-area" id="mapArea">
+      <canvas id="mapCanvas"></canvas>
+      <div class="night-overlay" id="nightOverlay"></div>
+
+      <!-- Legend -->
+      <div class="map-legend">
+        <div class="legend-title">Map Legend</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#ef4444"></div>High risk area</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#f59e0b"></div>Moderate risk</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#10b981"></div>Safe zone</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#3b82f6;border-radius:2px;width:16px;height:4px;"></div>Selected route</div>
+      </div>
+
+      <!-- Stats bar -->
+      <div class="stats-bar">
+        <div class="stat">
+          <div class="stat-val" id="statIncidents" style="color:var(--red)">12</div>
+          <div class="stat-key">INCIDENTS THIS MONTH</div>
+        </div>
+        <div class="stat">
+          <div class="stat-val" id="statSafe" style="color:var(--green)">5</div>
+          <div class="stat-key">VERIFIED SAFE ZONES</div>
+        </div>
+        <div class="stat">
+          <div class="stat-val" id="statUsers" style="color:var(--accent)">1,240</div>
+          <div class="stat-key">WOMEN USING MAP</div>
+        </div>
+        <div class="stat">
+          <div class="stat-val" id="statScore" style="color:var(--amber)">—</div>
+          <div class="stat-key">CITY SAFETY SCORE</div>
+        </div>
+      </div>
+
+      <!-- Popup -->
+      <div class="map-popup" id="mapPopup">
+        <div class="popup-type" id="popupType">INCIDENT</div>
+        <div class="popup-area" id="popupArea">—</div>
+        <div class="popup-detail" id="popupDetail">—</div>
+        <div class="popup-sev" id="popupSev">—</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+// ─── Data (mirrors backend seed) ─────────────────────────────────────────────
+const INCIDENTS = [
+  { id:'i1',  lat:12.9352, lng:77.6245, type:'catcalling', severity:2, time:'21:30', area:'Koramangala', reports:3 },
+  { id:'i2',  lat:12.9279, lng:77.6271, type:'stalking',   severity:4, time:'22:00', area:'Koramangala', reports:1 },
+  { id:'i3',  lat:12.9716, lng:77.5946, type:'assault',    severity:5, time:'23:15', area:'MG Road',     reports:5 },
+  { id:'i4',  lat:12.9698, lng:77.5985, type:'catcalling', severity:2, time:'20:45', area:'MG Road',     reports:2 },
+  { id:'i5',  lat:12.9610, lng:77.6387, type:'stalking',   severity:3, time:'21:00', area:'Indiranagar', reports:1 },
+  { id:'i6',  lat:12.9629, lng:77.6382, type:'groping',    severity:4, time:'22:30', area:'Indiranagar', reports:4 },
+  { id:'i7',  lat:12.9791, lng:77.5912, type:'catcalling', severity:2, time:'19:30', area:'Cubbon Park', reports:2 },
+  { id:'i8',  lat:12.9141, lng:77.6101, type:'assault',    severity:5, time:'23:00', area:'BTM Layout',  reports:6 },
+  { id:'i9',  lat:12.9121, lng:77.6089, type:'stalking',   severity:3, time:'21:45', area:'BTM Layout',  reports:2 },
+  { id:'i10', lat:12.9250, lng:77.5938, type:'catcalling', severity:2, time:'20:00', area:'Jayanagar',   reports:1 },
+  { id:'i11', lat:12.9850, lng:77.5533, type:'groping',    severity:4, time:'22:00', area:'Rajajinagar', reports:3 },
+  { id:'i12', lat:12.9380, lng:77.6140, type:'stalking',   severity:3, time:'21:20', area:'HSR Layout',  reports:1 },
+];
+
+const SAFE_ZONES = [
+  { lat:12.9716, lng:77.5946, name:'MG Road Metro',       score:88 },
+  { lat:12.9610, lng:77.6387, name:'Indiranagar 100ft',   score:82 },
+  { lat:12.9352, lng:77.6245, name:'Forum Mall',          score:91 },
+  { lat:12.9791, lng:77.5912, name:'Cubbon Park Gate',    score:64 },
+  { lat:12.9141, lng:77.6101, name:'BTM BDA Complex',     score:72 },
+];
+
+// Bangalore bounding box
+const MAP = { minLat:12.88, maxLat:13.00, minLng:77.51, maxLng:77.70 };
+
+let canvas, ctx, W, H;
+let currentRoutes = null;
+let selectedRoute = null;
+let hoveredPoint  = null;
+
+// ─── Canvas Setup ─────────────────────────────────────────────────────────────
+function initCanvas() {
+  canvas = document.getElementById('mapCanvas');
+  const area = document.getElementById('mapArea');
+  W = area.clientWidth;
+  H = area.clientHeight;
+  canvas.width  = W;
+  canvas.height = H;
+  ctx = canvas.getContext('2d');
+  drawMap();
+
+  canvas.addEventListener('mousemove', onMouseMove);
+  canvas.addEventListener('click', onMapClick);
+
+  window.addEventListener('resize', () => {
+    W = area.clientWidth;
+    H = area.clientHeight;
+    canvas.width  = W;
+    canvas.height = H;
+    drawMap();
+  });
+}
+
+// ─── Coordinate mapping ───────────────────────────────────────────────────────
+function toXY(lat, lng) {
+  const pad = 60;
+  const x = pad + ((lng - MAP.minLng) / (MAP.maxLng - MAP.minLng)) * (W - pad * 2);
+  const y = (H - pad) - ((lat - MAP.minLat) / (MAP.maxLat - MAP.minLat)) * (H - pad * 2);
+  return { x, y };
+}
+
+function fromXY(x, y) {
+  const pad = 60;
+  const lng = MAP.minLng + ((x - pad) / (W - pad * 2)) * (MAP.maxLng - MAP.minLng);
+  const lat = MAP.minLat + ((H - pad - y) / (H - pad * 2)) * (MAP.maxLat - MAP.minLat);
+  return { lat, lng };
+}
+
+// ─── Draw ─────────────────────────────────────────────────────────────────────
+function drawMap() {
+  ctx.clearRect(0, 0, W, H);
+
+  // Background grid (city street feeling)
+  drawGrid();
+
+  // Area labels
+  drawAreaLabels();
+
+  // Heatmap blobs
+  drawHeatmap();
+
+  // Safe zones
+  drawSafeZones();
+
+  // Incidents
+  drawIncidents();
+
+  // Routes (if computed)
+  if (currentRoutes) drawRoutes();
+}
+
+function drawGrid() {
+  ctx.strokeStyle = 'rgba(255,255,255,0.025)';
+  ctx.lineWidth = 1;
+
+  // Horizontal lines
+  for (let lat = 12.88; lat <= 13.00; lat += 0.015) {
+    const { y } = toXY(lat, MAP.minLng);
+    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+  }
+  // Vertical lines
+  for (let lng = 77.51; lng <= 77.70; lng += 0.02) {
+    const { x } = toXY(MAP.minLat, lng);
+    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke();
+  }
+
+  // City boundary subtle glow
+  const grad = ctx.createRadialGradient(W/2, H/2, 0, W/2, H/2, Math.max(W, H) * 0.6);
+  grad.addColorStop(0,   'rgba(59,130,246,0.04)');
+  grad.addColorStop(1,   'rgba(0,0,0,0)');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, W, H);
+}
+
+function drawAreaLabels() {
+  const areas = [
+    { lat:12.9352, lng:77.6245, label:'KORAMANGALA' },
+    { lat:12.9716, lng:77.5946, label:'MG ROAD' },
+    { lat:12.9610, lng:77.6387, label:'INDIRANAGAR' },
+    { lat:12.9791, lng:77.5912, label:'CUBBON PARK' },
+    { lat:12.9141, lng:77.6101, label:'BTM LAYOUT' },
+    { lat:12.9250, lng:77.5938, label:'JAYANAGAR' },
+    { lat:12.9850, lng:77.5533, label:'RAJAJINAGAR' },
+    { lat:12.9380, lng:77.6140, label:'HSR LAYOUT' },
+  ];
+
+  ctx.font = '500 10px DM Mono, monospace';
+  ctx.letterSpacing = '1px';
+  ctx.textAlign = 'center';
+
+  areas.forEach(({ lat, lng, label }) => {
+    const { x, y } = toXY(lat, lng);
+    ctx.fillStyle = 'rgba(74,85,104,0.7)';
+    ctx.fillText(label, x, y - 28);
+  });
+}
+
+function drawHeatmap() {
+  INCIDENTS.forEach(inc => {
+    const { x, y } = toXY(inc.lat, inc.lng);
+    const radius = 40 + inc.severity * 12 + inc.reports * 6;
+
+    const alpha = Math.min(0.18, 0.06 + inc.severity * 0.025 + inc.reports * 0.008);
+    const grad = ctx.createRadialGradient(x, y, 0, x, y, radius);
+
+    if (inc.severity >= 4) {
+      grad.addColorStop(0, `rgba(239,68,68,${alpha * 3})`);
+      grad.addColorStop(1, 'rgba(239,68,68,0)');
+    } else if (inc.severity === 3) {
+      grad.addColorStop(0, `rgba(245,158,11,${alpha * 3})`);
+      grad.addColorStop(1, 'rgba(245,158,11,0)');
+    } else {
+      grad.addColorStop(0, `rgba(251,191,36,${alpha * 2})`);
+      grad.addColorStop(1, 'rgba(251,191,36,0)');
+    }
+
+    ctx.beginPath();
+    ctx.arc(x, y, radius, 0, Math.PI * 2);
+    ctx.fillStyle = grad;
+    ctx.fill();
+  });
+}
+
+function drawSafeZones() {
+  SAFE_ZONES.forEach(zone => {
+    const { x, y } = toXY(zone.lat, zone.lng);
+    const alpha = zone.score / 100 * 0.15;
+
+    // Glow ring
+    const grad = ctx.createRadialGradient(x, y, 0, x, y, 35);
+    grad.addColorStop(0, `rgba(16,185,129,${alpha * 2})`);
+    grad.addColorStop(1, 'rgba(16,185,129,0)');
+    ctx.beginPath();
+    ctx.arc(x, y, 35, 0, Math.PI * 2);
+    ctx.fillStyle = grad;
+    ctx.fill();
+
+    // Dot
+    ctx.beginPath();
+    ctx.arc(x, y, 6, 0, Math.PI * 2);
+    ctx.fillStyle = '#10b981';
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(16,185,129,0.5)';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+  });
+}
+
+function drawIncidents() {
+  INCIDENTS.forEach(inc => {
+    const { x, y } = toXY(inc.lat, inc.lng);
+    const r = 5 + inc.reports;
+    const color = inc.severity >= 4 ? '#ef4444' : inc.severity === 3 ? '#f59e0b' : '#fbbf24';
+
+    // Outer ring
+    ctx.beginPath();
+    ctx.arc(x, y, r + 4, 0, Math.PI * 2);
+    ctx.fillStyle = color.replace(')', ',0.15)').replace('rgb', 'rgba');
+    ctx.fill();
+
+    // Core dot
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.fillStyle = color;
+    ctx.fill();
+
+    // Report count badge
+    if (inc.reports > 1) {
+      ctx.font = 'bold 9px DM Mono';
+      ctx.textAlign = 'center';
+      ctx.fillStyle = '#fff';
+      ctx.fillText(inc.reports, x, y + 3);
+    }
+  });
+}
+
+function drawRoutes() {
+  if (!currentRoutes) return;
+
+  currentRoutes.forEach((route, idx) => {
+    const isSelected = selectedRoute?.id === route.id;
+    const wp = route.waypoints;
+
+    const color = isSelected ? '#3b82f6'
+                : idx === 0   ? '#10b981'
+                : idx === 1   ? '#ef4444'
+                :               '#f59e0b';
+
+    ctx.beginPath();
+    const start = toXY(wp[0].lat, wp[0].lng);
+    ctx.moveTo(start.x, start.y);
+
+    for (let i = 1; i < wp.length; i++) {
+      const pt = toXY(wp[i].lat, wp[i].lng);
+      ctx.lineTo(pt.x, pt.y);
+    }
+
+    ctx.strokeStyle = color;
+    ctx.lineWidth   = isSelected ? 4 : 2.5;
+    ctx.setLineDash(isSelected ? [] : [6, 4]);
+    ctx.globalAlpha = isSelected ? 1 : 0.6;
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.globalAlpha = 1;
+
+    // Endpoint markers
+    const end = toXY(wp[wp.length - 1].lat, wp[wp.length - 1].lng);
+    ctx.beginPath();
+    ctx.arc(end.x, end.y, 7, 0, Math.PI * 2);
+    ctx.fillStyle = color;
+    ctx.fill();
+
+    // Route label
+    const mid = toXY(
+      (wp[0].lat + wp[wp.length-1].lat) / 2 + (route.waypoints[1]?.lat - (wp[0].lat + wp[wp.length-1].lat)/2) * 0.5,
+      (wp[0].lng + wp[wp.length-1].lng) / 2 + (route.waypoints[1]?.lng - (wp[0].lng + wp[wp.length-1].lng)/2) * 0.5
+    );
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 11px DM Mono';
+    ctx.textAlign = 'center';
+    ctx.fillText(`Route ${route.id}`, mid.x, mid.y - 8);
+  });
+}
+
+// ─── Mouse interactions ───────────────────────────────────────────────────────
+function onMouseMove(e) {
+  const rect = canvas.getBoundingClientRect();
+  const mx = e.clientX - rect.left;
+  const my = e.clientY - rect.top;
+
+  let closest = null;
+  let closestD = 999;
+
+  INCIDENTS.forEach(inc => {
+    const { x, y } = toXY(inc.lat, inc.lng);
+    const d = Math.hypot(mx - x, my - y);
+    if (d < 20 && d < closestD) { closest = { ...inc, px: x, py: y }; closestD = d; }
+  });
+
+  SAFE_ZONES.forEach(z => {
+    const { x, y } = toXY(z.lat, z.lng);
+    const d = Math.hypot(mx - x, my - y);
+    if (d < 18 && d < closestD) { closest = { ...z, isSafe: true, px: x, py: y }; closestD = d; }
+  });
+
+  const popup = document.getElementById('mapPopup');
+
+  if (closest) {
+    canvas.style.cursor = 'pointer';
+    showPopup(closest, e.clientX, e.clientY);
+  } else {
+    canvas.style.cursor = 'crosshair';
+    popup.classList.remove('visible');
+  }
+}
+
+function showPopup(pt, mx, my) {
+  const popup = document.getElementById('mapPopup');
+  const sevColors  = ['','#fbbf24','#fbbf24','#f59e0b','#ef4444','#ef4444'];
+  const sevLabels  = ['','Low','Moderate','Medium','High','Severe'];
+  const typeLabels = { catcalling:'Catcalling', stalking:'Stalking', groping:'Groping/Assault', assault:'Physical Assault', other:'Other' };
+
+  if (pt.isSafe) {
+    document.getElementById('popupType').textContent   = 'SAFE ZONE';
+    document.getElementById('popupArea').textContent   = pt.name;
+    document.getElementById('popupDetail').textContent = `Safety score: ${pt.score}/100`;
+    const sev = document.getElementById('popupSev');
+    sev.textContent = '✅ Verified safe';
+    sev.style.cssText = 'background:rgba(16,185,129,0.12);color:#10b981;';
+  } else {
+    document.getElementById('popupType').textContent   = 'REPORTED INCIDENT';
+    document.getElementById('popupArea').textContent   = pt.area;
+    document.getElementById('popupDetail').textContent = `${typeLabels[pt.type] || pt.type} · ${pt.time} · ${pt.reports} report${pt.reports > 1 ? 's' : ''}`;
+    const sev = document.getElementById('popupSev');
+    sev.textContent = `Severity: ${sevLabels[pt.severity] || pt.severity}`;
+    sev.style.cssText = `background:rgba(239,68,68,0.1);color:${sevColors[pt.severity]};`;
+  }
+
+  const rect = document.getElementById('mapArea').getBoundingClientRect();
+  let left = mx - rect.left + 12;
+  let top  = my - rect.top  - 60;
+  if (left + 270 > rect.width)  left -= 280;
+  if (top < 0) top = my - rect.top + 12;
+
+  popup.style.left = left + 'px';
+  popup.style.top  = top  + 'px';
+  popup.classList.add('visible');
+}
+
+function onMapClick(e) {
+  // Future: pin location for reporting
+}
+
+// ─── Route Finder ─────────────────────────────────────────────────────────────
+
+// Known Bangalore locations — fuzzy matched against user input
+const KNOWN_LOCATIONS = {
+  'koramangala':   { lat: 12.9352, lng: 77.6245, label: 'Koramangala' },
+  'indiranagar':   { lat: 12.9610, lng: 77.6387, label: 'Indiranagar' },
+  'mg road':       { lat: 12.9716, lng: 77.5946, label: 'MG Road' },
+  'mgroad':        { lat: 12.9716, lng: 77.5946, label: 'MG Road' },
+  'btm':           { lat: 12.9141, lng: 77.6101, label: 'BTM Layout' },
+  'btm layout':    { lat: 12.9141, lng: 77.6101, label: 'BTM Layout' },
+  'jayanagar':     { lat: 12.9250, lng: 77.5938, label: 'Jayanagar' },
+  'cubbon':        { lat: 12.9791, lng: 77.5912, label: 'Cubbon Park' },
+  'cubbon park':   { lat: 12.9791, lng: 77.5912, label: 'Cubbon Park' },
+  'rajajinagar':   { lat: 12.9850, lng: 77.5533, label: 'Rajajinagar' },
+  'hsr':           { lat: 12.9380, lng: 77.6140, label: 'HSR Layout' },
+  'hsr layout':    { lat: 12.9380, lng: 77.6140, label: 'HSR Layout' },
+  'whitefield':    { lat: 12.9698, lng: 77.7499, label: 'Whitefield' },
+  'electronic city': { lat: 12.8458, lng: 77.6692, label: 'Electronic City' },
+  'hebbal':        { lat: 13.0358, lng: 77.5970, label: 'Hebbal' },
+  'yelahanka':     { lat: 13.1007, lng: 77.5963, label: 'Yelahanka' },
+  'marathahalli':  { lat: 12.9591, lng: 77.6972, label: 'Marathahalli' },
+  'bannerghatta':  { lat: 12.8931, lng: 77.5971, label: 'Bannerghatta Road' },
+  'jp nagar':      { lat: 12.9077, lng: 77.5852, label: 'JP Nagar' },
+  'jpnagar':       { lat: 12.9077, lng: 77.5852, label: 'JP Nagar' },
+  'malleswaram':   { lat: 13.0035, lng: 77.5636, label: 'Malleswaram' },
+  'ulsoor':        { lat: 12.9784, lng: 77.6181, label: 'Ulsoor' },
+  'shivajinagar':  { lat: 12.9833, lng: 77.6010, label: 'Shivajinagar' },
+};
+
+// Route template profiles — applied to any from/to pair
+const ROUTE_PROFILES = [
+  {
+    id: 'A',
+    name: 'Main Road Route',
+    descTpl: 'Via main boulevard & well-lit roads',
+    midBias: { lat: 0.003, lng: 0.001 },      // midpoint offset from straight line
+    distFactor: 1.4, timeFactor: 1.5,
+    features: { lit: true,  busy: true,  cctv: true,  policeNearby: true  },
+    incidentBias: -1,   // fewer incidents on main roads
+    scoreBias: +10,
+  },
+  {
+    id: 'B',
+    name: 'Shortcut',
+    descTpl: 'Faster but through inner lanes — not recommended at night',
+    midBias: { lat: -0.002, lng: -0.003 },
+    distFactor: 0.85, timeFactor: 0.75,
+    features: { lit: false, busy: false, cctv: false, policeNearby: false },
+    incidentBias: +2,
+    scoreBias: -25,
+  },
+  {
+    id: 'C',
+    name: 'Market Route',
+    descTpl: 'Through commercial area — busy, slightly longer',
+    midBias: { lat: -0.001, lng: 0.004 },
+    distFactor: 1.6, timeFactor: 1.7,
+    features: { lit: true,  busy: true,  cctv: false, policeNearby: false },
+    incidentBias: 0,
+    scoreBias: +2,
+  },
+];
+
+// Fuzzy match: find best location for a text query
+function resolveLocation(text) {
+  const lower = text.toLowerCase().trim()
+    .replace(/,.*$/, '')       // drop ", bangalore" etc
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  // Exact match first
+  if (KNOWN_LOCATIONS[lower]) return KNOWN_LOCATIONS[lower];
+
+  // Partial match
+  for (const [key, loc] of Object.entries(KNOWN_LOCATIONS)) {
+    if (lower.includes(key) || key.includes(lower)) return loc;
+  }
+
+  return null;
+}
+
+// Haversine distance in km
+function distKm(a, b) {
+  const R = 6371, dLat = (b.lat - a.lat) * Math.PI / 180, dLng = (b.lng - a.lng) * Math.PI / 180;
+  const x = Math.sin(dLat/2)**2 + Math.cos(a.lat*Math.PI/180)*Math.cos(b.lat*Math.PI/180)*Math.sin(dLng/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1-x));
+}
+
+// Count incidents near a bounding corridor between two points
+function incidentsAlongRoute(from, to, bias) {
+  const pad = 0.025;
+  const minLat = Math.min(from.lat, to.lat) - pad;
+  const maxLat = Math.max(from.lat, to.lat) + pad;
+  const minLng = Math.min(from.lng, to.lng) - pad;
+  const maxLng = Math.max(from.lng, to.lng) + pad;
+  const count = INCIDENTS.filter(i =>
+    i.lat >= minLat && i.lat <= maxLat &&
+    i.lng >= minLng && i.lng <= maxLng
+  ).length;
+  return Math.max(0, count + bias);
+}
+
+// Compute safety score from route features + incidents
+function calcScore(features, incidentCount, isNight) {
+  let score = 90;
+  score -= incidentCount * 10;
+  if (!features.lit)          score -= isNight ? 22 : 5;
+  if (!features.busy)         score -= isNight ? 14 : 4;
+  if (!features.cctv)         score -= 6;
+  if (!features.policeNearby) score -= 4;
+  return Math.max(5, Math.min(97, Math.round(score)));
+}
+
+// Build 3 routes from from-coords to to-coords
+function buildRoutes(from, to, isNight) {
+  const baseDist = distKm(from, to);
+  const baseTime = baseDist * 4; // ~4 min/km walking/auto baseline
+
+  return ROUTE_PROFILES.map(profile => {
+    // Midpoint shifted by profile bias
+    const mid = {
+      lat: (from.lat + to.lat) / 2 + profile.midBias.lat,
+      lng: (from.lng + to.lng) / 2 + profile.midBias.lng,
+    };
+
+    const incidentCount = incidentsAlongRoute(from, to, profile.incidentBias);
+    const baseScore = calcScore(profile.features, incidentCount, isNight);
+    const safetyScore = Math.max(5, Math.min(97, baseScore + profile.scoreBias));
+    const distanceKm  = parseFloat((baseDist * profile.distFactor).toFixed(1));
+    const durationMin = Math.round(baseTime * profile.timeFactor);
+
+    return {
+      id:           profile.id,
+      name:         profile.name,
+      description:  profile.descTpl,
+      distanceKm,
+      durationMin,
+      safetyScore,
+      features:     profile.features,
+      incidentCount,
+      recommended:  false,
+      waypoints: [
+        { lat: from.lat, lng: from.lng },
+        { lat: mid.lat,  lng: mid.lng  },
+        { lat: to.lat,   lng: to.lng   },
+      ],
+    };
+  });
+}
+
+async function findRoutes() {
+  const fromVal = document.getElementById('fromInput').value.trim();
+  const toVal   = document.getElementById('toInput').value.trim();
+  const time    = document.getElementById('timeInput').value;
+
+  if (!toVal) { alert('Please enter a destination'); return; }
+
+  const list = document.getElementById('routesList');
+  list.innerHTML = '<div style="text-align:center;padding:30px;color:var(--muted);font-size:13px;">🔍 Calculating safety scores...</div>';
+
+  await new Promise(r => setTimeout(r, 700));
+
+  // Resolve text → coordinates
+  const fromLoc = resolveLocation(fromVal);
+  const toLoc   = resolveLocation(toVal);
+
+  if (!fromLoc) {
+    list.innerHTML = `<div style="padding:20px;color:var(--red);font-size:13px;">
+      ⚠️ Couldn't find "<b>${fromVal}</b>".<br><br>
+      Try: Koramangala, Indiranagar, MG Road, BTM, Jayanagar, HSR, Whitefield, Malleswaram, JP Nagar, Hebbal…
+    </div>`;
+    return;
+  }
+  if (!toLoc) {
+    list.innerHTML = `<div style="padding:20px;color:var(--red);font-size:13px;">
+      ⚠️ Couldn't find "<b>${toVal}</b>".<br><br>
+      Try: Koramangala, Indiranagar, MG Road, BTM, Jayanagar, HSR, Whitefield, Malleswaram, JP Nagar, Hebbal…
+    </div>`;
+    return;
+  }
+
+  if (fromLoc.label === toLoc.label) {
+    list.innerHTML = `<div style="padding:20px;color:var(--amber);font-size:13px;">⚠️ From and To are the same location. Try a different destination.</div>`;
+    return;
+  }
+
+  const hour    = parseInt(time.split(':')[0]);
+  const isNight = hour >= 20 || hour < 6;
+
+  // Build dynamic routes
+  let routes = buildRoutes(fromLoc, toLoc, isNight);
+
+  // Mark safest
+  const safest = routes.reduce((best, r) => r.safetyScore > best.safetyScore ? r : best, routes[0]);
+  safest.recommended = true;
+
+  // Sort: safest first
+  routes.sort((a, b) => b.safetyScore - a.safetyScore);
+
+  currentRoutes = routes;
+  selectedRoute = routes[0];
+
+  renderRouteCards(routes, isNight, fromLoc, toLoc);
+  drawMap();
+}
+
+function renderRouteCards(routes, isNight, fromLoc, toLoc) {
+  const scoreColor = s => s >= 70 ? '#10b981' : s >= 45 ? '#f59e0b' : '#ef4444';
+  const list = document.getElementById('routesList');
+
+  const fromLabel = fromLoc?.label || 'Origin';
+  const toLabel   = toLoc?.label   || 'Destination';
+  const dist      = fromLoc && toLoc ? distKm(fromLoc, toLoc).toFixed(1) : '--';
+
+  list.innerHTML = `
+    <div style="background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:12px 14px;margin-bottom:4px;">
+      <div style="color:var(--muted);font-family:var(--mono);font-size:10px;letter-spacing:1px;margin-bottom:6px;">JOURNEY</div>
+      <div style="color:#fff;font-weight:600;font-size:13px;">&#x1F4CD; ${fromLabel} → ${toLabel}</div>
+      <div style="color:var(--muted);margin-top:4px;font-size:11px;">~${dist} km · 3 routes analysed</div>
+    </div>
+    ${isNight ? '<div style="background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);border-radius:10px;padding:12px 14px;font-size:12px;color:#ef4444;">🌙 Night mode — safety scores adjusted. Share location before travelling.</div>' : ''}
+  `;
+
+  routes.forEach((route, i) => {
+    const card = document.createElement('div');
+    card.className = 'route-card' + (route.recommended ? ' recommended' : '') + (i === 0 ? ' selected' : '');
+    card.onclick = () => selectRoute(route, card);
+
+    const sc = route.safetyScore;
+    const featArr = [
+      { key: '💡 Lit', val: route.features.lit },
+      { key: '👥 Busy', val: route.features.busy },
+      { key: '📷 CCTV', val: route.features.cctv },
+      { key: '🚔 Police', val: route.features.policeNearby },
+    ];
+
+    card.innerHTML = `
+      ${route.recommended ? '<div class="route-badge">✓ SAFEST</div>' : ''}
+      ${!route.features.lit && !route.features.busy ? '<div class="route-badge avoid">AVOID</div>' : ''}
+      <div class="route-header">
+        <div class="route-letter ${route.id}">${route.id}</div>
+        <div>
+          <div class="route-name">${route.name}</div>
+          <div class="route-desc">${route.description}</div>
+        </div>
+      </div>
+      <div class="route-meta">
+        <div class="meta-item"><div class="meta-val">${route.durationMin} min</div><div class="meta-key">DURATION</div></div>
+        <div class="meta-item"><div class="meta-val">${route.distanceKm} km</div><div class="meta-key">DISTANCE</div></div>
+        <div class="meta-item"><div class="meta-val" style="color:${scoreColor(sc)}">${route.incidentCount}</div><div class="meta-key">INCIDENTS</div></div>
+      </div>
+      <div class="score-bar-wrap">
+        <div class="score-bar-header">
+          <span class="score-label">Safety Score</span>
+          <span class="score-val" style="color:${scoreColor(sc)}">${sc}/100</span>
+        </div>
+        <div class="score-bar">
+          <div class="score-fill" style="width:${sc}%;background:${scoreColor(sc)}"></div>
+        </div>
+      </div>
+      <div class="route-features">
+        ${featArr.map(f => `<div class="feat-tag ${f.val ? 'yes' : 'no'}">${f.val ? '✓' : '✗'} ${f.key}</div>`).join('')}
+      </div>
+    `;
+    list.appendChild(card);
+  });
+}
+
+function selectRoute(route, cardEl) {
+  selectedRoute = route;
+  document.querySelectorAll('.route-card').forEach(c => c.classList.remove('selected'));
+  cardEl.classList.add('selected');
+  drawMap();
+}
+
+// ─── Report form ──────────────────────────────────────────────────────────────
+let selectedType = 'catcalling';
+let selectedSev  = 2;
+
+function selectType(el) {
+  document.querySelectorAll('.incident-type').forEach(e => e.classList.remove('selected'));
+  el.classList.add('selected');
+  selectedType = el.dataset.type;
+}
+
+function selectSev(el) {
+  document.querySelectorAll('.sev-btn').forEach(e => e.classList.remove('selected'));
+  el.classList.add('selected');
+  selectedSev = parseInt(el.dataset.sev);
+}
+
+async function submitReport() {
+  const area = document.getElementById('reportArea').value.trim();
+  const time = document.getElementById('reportTime').value;
+  const desc = document.getElementById('reportDesc').value.trim();
+
+  if (!area) { alert('Please enter the area where this happened'); return; }
+
+  const btn = document.querySelector('.submit-btn');
+  btn.textContent = 'Submitting...';
+  btn.disabled = true;
+
+  // Try backend, fallback to local
+  const newIncident = {
+    id: 'u' + Date.now(),
+    lat:  MAP.minLat + Math.random() * (MAP.maxLat - MAP.minLat),
+    lng:  MAP.minLng + Math.random() * (MAP.maxLng - MAP.minLng),
+    type: selectedType, severity: selectedSev,
+    time, area, reports: 1,
+  };
+
+  try {
+    const res = await fetch('http://localhost:3001/api/safety/report', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...newIncident, description: desc }),
+    });
+    const data = await res.json();
+    if (data.incident) Object.assign(newIncident, data.incident);
+  } catch(e) { /* backend offline, use local */ }
+
+  INCIDENTS.push(newIncident);
+  document.getElementById('statIncidents').textContent = INCIDENTS.length;
+  drawMap();
+
+  await new Promise(r => setTimeout(r, 400));
+  btn.textContent = '✅ Report Submitted — Thank you';
+  btn.style.background = 'var(--green)';
+  setTimeout(() => {
+    btn.textContent = 'Submit Anonymous Report';
+    btn.style.background = '';
+    btn.disabled = false;
+    document.getElementById('reportArea').value = '';
+    document.getElementById('reportDesc').value = '';
+  }, 3000);
+}
+
+// ─── Panel switching ──────────────────────────────────────────────────────────
+function switchPanel(name) {
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.getElementById(`panel-${name}`).classList.add('active');
+  event.target.classList.add('active');
+}
+
+// ─── Clock ────────────────────────────────────────────────────────────────────
+function updateClock() {
+  const now = new Date();
+  const h = now.getHours(), m = now.getMinutes();
+  const ampm = h >= 12 ? 'PM' : 'AM';
+  const hh = h % 12 || 12;
+  document.getElementById('clockBadge').textContent =
+    `${String(hh).padStart(2,'0')}:${String(m).padStart(2,'0')} ${ampm}`;
+
+  // Auto night overlay
+  const isNight = h >= 20 || h < 6;
+  document.getElementById('nightOverlay').classList.toggle('active', isNight);
+}
+
+// ─── Stats ────────────────────────────────────────────────────────────────────
+function updateStats() {
+  const avgScore = Math.round(
+    SAFE_ZONES.reduce((s, z) => s + z.score, 0) / SAFE_ZONES.length
+  );
+  document.getElementById('statScore').textContent = avgScore + '/100';
+}
+
+// ─── Init ─────────────────────────────────────────────────────────────────────
+window.addEventListener('load', () => {
+  initCanvas();
+  updateClock();
+  updateStats();
+  setInterval(updateClock, 10000);
+
+  // Auto-find routes for demo
+  setTimeout(() => {
+    document.getElementById('toInput').value = 'Indiranagar, Bangalore';
+    findRoutes();
+  }, 800);
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,750 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SafeGuard — Command Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.min.js"></script>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg:      #020507;
+  --s1:      #060d14;
+  --s2:      #0a1520;
+  --s3:      #0f1e2e;
+  --border:  rgba(0,180,255,0.08);
+  --border2: rgba(0,180,255,0.18);
+  --text:    #8ab4cc;
+  --bright:  #c9e4f5;
+  --muted:   #2a4a5e;
+  --cyan:    #00b4ff;
+  --green:   #00ff88;
+  --red:     #ff3b3b;
+  --amber:   #ffb800;
+  --purple:  #a855f7;
+  --mono:    'JetBrains Mono', monospace;
+  --display: 'Rajdhani', sans-serif;
+}
+html, body { height: 100%; background: var(--bg); color: var(--text); font-family: var(--display); overflow: hidden; }
+
+/* scanline texture */
+body::before {
+  content: ''; position: fixed; inset: 0; pointer-events: none; z-index: 9999;
+  background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.03) 2px, rgba(0,0,0,0.03) 4px);
+}
+
+/* ─── Layout ─── */
+.app { display: grid; grid-template-rows: 52px 1fr; height: 100vh; }
+
+/* ─── Header ─── */
+header {
+  display: flex; align-items: center; gap: 20px; padding: 0 20px;
+  background: var(--s1); border-bottom: 1px solid var(--border2);
+  position: relative;
+}
+header::after {
+  content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 1px;
+  background: linear-gradient(90deg, transparent, var(--cyan), transparent);
+  opacity: 0.4;
+}
+.hdr-logo { display: flex; align-items: center; gap: 10px; }
+.hdr-mark {
+  width: 32px; height: 32px; border: 2px solid var(--cyan); border-radius: 6px;
+  display: flex; align-items: center; justify-content: center; font-size: 16px;
+  position: relative;
+}
+.hdr-mark::after {
+  content: ''; position: absolute; inset: 2px; border: 1px solid rgba(0,180,255,0.3); border-radius: 3px;
+}
+.hdr-title { font-size: 18px; font-weight: 700; color: var(--cyan); letter-spacing: 2px; }
+.hdr-sub   { font-size: 10px; color: var(--muted); font-family: var(--mono); letter-spacing: 1px; }
+
+.hdr-status {
+  display: flex; align-items: center; gap: 8px;
+  background: rgba(0,255,136,0.06); border: 1px solid rgba(0,255,136,0.2);
+  border-radius: 6px; padding: 5px 14px;
+  font-size: 11px; color: var(--green); font-family: var(--mono); letter-spacing: 1px;
+}
+.pulse-dot {
+  width: 7px; height: 7px; border-radius: 50%; background: var(--green);
+  animation: pulse 1.5s ease-in-out infinite;
+}
+@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+.hdr-right { margin-left: auto; display: flex; align-items: center; gap: 16px; }
+.clock { font-family: var(--mono); font-size: 14px; color: var(--cyan); letter-spacing: 2px; }
+.hdr-badge {
+  background: var(--s2); border: 1px solid var(--border2); border-radius: 6px;
+  padding: 4px 12px; font-size: 11px; font-family: var(--mono); color: var(--text);
+}
+
+/* ─── Main grid ─── */
+.main { display: grid; grid-template-columns: 260px 1fr 280px; overflow: hidden; }
+
+/* ─── Left sidebar ─── */
+.left-col { background: var(--s1); border-right: 1px solid var(--border); display: flex; flex-direction: column; overflow: hidden; }
+.col-section { border-bottom: 1px solid var(--border); padding: 14px 16px; flex-shrink: 0; }
+.col-label { font-size: 9px; font-family: var(--mono); color: var(--muted); letter-spacing: 2px; text-transform: uppercase; margin-bottom: 10px; }
+
+/* KPI grid */
+.kpi-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.kpi {
+  background: var(--s2); border: 1px solid var(--border); border-radius: 8px;
+  padding: 10px 12px; position: relative; overflow: hidden;
+}
+.kpi::before {
+  content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+}
+.kpi.red::before   { background: var(--red); }
+.kpi.green::before { background: var(--green); }
+.kpi.amber::before { background: var(--amber); }
+.kpi.cyan::before  { background: var(--cyan); }
+.kpi-val { font-size: 24px; font-weight: 700; font-family: var(--mono); }
+.kpi.red   .kpi-val { color: var(--red); }
+.kpi.green .kpi-val { color: var(--green); }
+.kpi.amber .kpi-val { color: var(--amber); }
+.kpi.cyan  .kpi-val { color: var(--cyan); }
+.kpi-label { font-size: 9px; color: var(--muted); letter-spacing: 0.8px; margin-top: 2px; }
+
+/* Active alerts list */
+.alerts-scroll { flex: 1; overflow-y: auto; padding: 10px; display: flex; flex-direction: column; gap: 8px; }
+.alert-row {
+  background: var(--s2); border: 1px solid var(--border); border-radius: 10px;
+  padding: 12px; cursor: pointer; transition: border-color 0.2s;
+  position: relative; overflow: hidden;
+}
+.alert-row::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; }
+.alert-row.critical::before { background: var(--red); }
+.alert-row.active::before   { background: var(--amber); }
+.alert-row.resolved::before { background: var(--green); }
+.alert-row:hover { border-color: var(--border2); }
+.alert-row.selected { border-color: var(--cyan); }
+.ar-name   { font-size: 13px; font-weight: 600; color: var(--bright); margin-bottom: 3px; }
+.ar-area   { font-size: 11px; color: var(--muted); font-family: var(--mono); }
+.ar-time   { font-size: 10px; color: var(--muted); font-family: var(--mono); margin-top: 4px; }
+.ar-badge  {
+  display: inline-block; font-size: 9px; font-family: var(--mono); letter-spacing: 0.5px;
+  padding: 2px 7px; border-radius: 4px; margin-top: 4px;
+}
+.ar-badge.critical { background: rgba(255,59,59,0.15); color: var(--red); border: 1px solid rgba(255,59,59,0.3); }
+.ar-badge.active   { background: rgba(255,184,0,0.1);  color: var(--amber); border: 1px solid rgba(255,184,0,0.3); }
+.ar-badge.resolved { background: rgba(0,255,136,0.08); color: var(--green); border: 1px solid rgba(0,255,136,0.2); }
+
+/* ─── Center: Map ─── */
+.map-col { position: relative; overflow: hidden; background: var(--bg); }
+canvas#dashMap { position: absolute; inset: 0; width: 100%; height: 100%; }
+
+.map-overlay-tl {
+  position: absolute; top: 16px; left: 16px;
+  background: rgba(6,13,20,0.85); backdrop-filter: blur(8px);
+  border: 1px solid var(--border2); border-radius: 10px; padding: 12px 16px;
+  font-family: var(--mono); font-size: 11px; color: var(--text);
+  display: flex; flex-direction: column; gap: 6px;
+}
+.map-overlay-tl .leg-item { display: flex; align-items: center; gap: 8px; }
+.leg-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+
+.dispatch-btn {
+  position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
+  background: var(--red); color: #fff; border: none; border-radius: 10px;
+  padding: 12px 32px; font-size: 14px; font-weight: 700; cursor: pointer;
+  font-family: var(--display); letter-spacing: 1px;
+  box-shadow: 0 0 30px rgba(255,59,59,0.4); transition: all 0.2s;
+  display: none;
+}
+.dispatch-btn:hover { box-shadow: 0 0 48px rgba(255,59,59,0.6); transform: translateX(-50%) scale(1.03); }
+
+/* ─── Right col ─── */
+.right-col { background: var(--s1); border-left: 1px solid var(--border); display: flex; flex-direction: column; overflow: hidden; }
+
+/* Incident detail */
+.detail-panel { padding: 16px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+.detail-name  { font-size: 18px; font-weight: 700; color: var(--bright); margin-bottom: 4px; }
+.detail-sub   { font-size: 11px; color: var(--muted); font-family: var(--mono); }
+.detail-grid  { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
+.detail-cell  { background: var(--s2); border: 1px solid var(--border); border-radius: 8px; padding: 10px; }
+.dc-label { font-size: 9px; color: var(--muted); font-family: var(--mono); letter-spacing: 1px; margin-bottom: 4px; }
+.dc-val   { font-size: 14px; font-weight: 600; color: var(--bright); font-family: var(--mono); }
+
+.action-btns { display: flex; flex-direction: column; gap: 8px; padding: 14px 16px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+.action-btn {
+  background: var(--s2); border: 1px solid var(--border2); border-radius: 8px;
+  padding: 10px 14px; font-size: 12px; font-weight: 600; cursor: pointer;
+  color: var(--text); font-family: var(--display); letter-spacing: 0.5px;
+  display: flex; align-items: center; gap: 10px; transition: all 0.15s;
+  text-align: left;
+}
+.action-btn:hover { border-color: var(--cyan); color: var(--cyan); background: rgba(0,180,255,0.05); }
+.action-btn.danger { border-color: rgba(255,59,59,0.3); color: var(--red); }
+.action-btn.danger:hover { background: rgba(255,59,59,0.08); }
+.action-btn.success { border-color: rgba(0,255,136,0.3); color: var(--green); }
+.action-btn.success:hover { background: rgba(0,255,136,0.05); }
+
+/* Log feed */
+.log-scroll { flex: 1; overflow-y: auto; padding: 10px 16px; display: flex; flex-direction: column; gap: 6px; }
+.log-entry {
+  font-size: 11px; font-family: var(--mono); padding: 6px 10px; border-radius: 6px;
+  background: var(--s2); border-left: 2px solid var(--muted); color: var(--text);
+  animation: log-in 0.2s ease;
+}
+@keyframes log-in { from { opacity: 0; transform: translateX(8px); } }
+.log-entry.crit { border-left-color: var(--red); color: var(--red); }
+.log-entry.ok   { border-left-color: var(--green); }
+.log-entry.info { border-left-color: var(--cyan); }
+.log-time { color: var(--muted); margin-right: 8px; }
+
+/* Analytics chart placeholder */
+.chart-section { padding: 14px 16px; border-top: 1px solid var(--border); flex-shrink: 0; }
+.chart-bars { display: flex; align-items: flex-end; gap: 4px; height: 50px; margin-top: 8px; }
+.bar {
+  flex: 1; border-radius: 3px 3px 0 0; background: rgba(0,180,255,0.25);
+  border: 1px solid rgba(0,180,255,0.3); transition: height 0.5s ease;
+  position: relative;
+}
+.bar.peak { background: rgba(255,59,59,0.35); border-color: rgba(255,59,59,0.5); }
+.bar-label { font-size: 8px; color: var(--muted); text-align: center; margin-top: 4px; font-family: var(--mono); }
+.chart-xlabel { display: flex; gap: 4px; }
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 3px; }
+::-webkit-scrollbar-thumb { background: var(--s3); border-radius: 2px; }
+</style>
+</head>
+<body>
+<div class="app">
+
+<!-- ─── Header ─── -->
+<header>
+  <div class="hdr-logo">
+    <div class="hdr-mark">🛡</div>
+    <div>
+      <div class="hdr-title">SAFEGUARD COMMAND</div>
+      <div class="hdr-sub">BANGALORE METROPOLITAN SAFETY OPERATIONS</div>
+    </div>
+  </div>
+  <div class="hdr-status"><div class="pulse-dot"></div>SYSTEM OPERATIONAL · ALL UNITS CONNECTED</div>
+  <div class="hdr-right">
+    <div class="hdr-badge">🔗 POLYGON TESTNET</div>
+    <div class="hdr-badge">📡 LIVE</div>
+    <div class="clock" id="clock">--:--:--</div>
+  </div>
+</header>
+
+<div class="main">
+
+  <!-- ─── LEFT: KPIs + Alert list ─── -->
+  <div class="left-col">
+    <div class="col-section">
+      <div class="col-label">Today's Overview</div>
+      <div class="kpi-grid">
+        <div class="kpi red">
+          <div class="kpi-val" id="kpiSOS">3</div>
+          <div class="kpi-label">ACTIVE SOS</div>
+        </div>
+        <div class="kpi green">
+          <div class="kpi-val" id="kpiResolved">47</div>
+          <div class="kpi-label">RESOLVED</div>
+        </div>
+        <div class="kpi amber">
+          <div class="kpi-val" id="kpiAvg">4.2m</div>
+          <div class="kpi-label">AVG RESPONSE</div>
+        </div>
+        <div class="kpi cyan">
+          <div class="kpi-val" id="kpiUsers">1.2K</div>
+          <div class="kpi-label">ACTIVE USERS</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-section" style="flex-shrink:0;">
+      <div class="col-label">Incident Queue</div>
+    </div>
+    <div class="alerts-scroll" id="alertsList"></div>
+  </div>
+
+  <!-- ─── CENTER: Map ─── -->
+  <div class="map-col" id="mapCol">
+    <canvas id="dashMap"></canvas>
+
+    <!-- Legend -->
+    <div class="map-overlay-tl">
+      <div style="font-size:9px;letter-spacing:2px;color:var(--muted);margin-bottom:4px;">MAP LEGEND</div>
+      <div class="leg-item"><div class="leg-dot" style="background:var(--red)"></div>Active SOS</div>
+      <div class="leg-item"><div class="leg-dot" style="background:var(--amber)"></div>Incident report</div>
+      <div class="leg-item"><div class="leg-dot" style="background:var(--green)"></div>Safe zone / Resolved</div>
+      <div class="leg-item"><div class="leg-dot" style="background:var(--cyan)"></div>Police unit</div>
+      <div class="leg-item"><div class="leg-dot" style="background:var(--purple)"></div>Circle member</div>
+    </div>
+
+    <button class="dispatch-btn" id="dispatchBtn" onclick="dispatchPolice()">
+      🚔 DISPATCH POLICE UNIT
+    </button>
+  </div>
+
+  <!-- ─── RIGHT: Detail + Log ─── -->
+  <div class="right-col">
+    <div class="detail-panel" id="detailPanel">
+      <div class="detail-name">Select an incident</div>
+      <div class="detail-sub">Click any alert to view details and take action</div>
+    </div>
+
+    <div class="action-btns" id="actionBtns" style="display:none;">
+      <button class="action-btn danger" onclick="dispatchPolice()">🚔 Dispatch Nearest Police Unit</button>
+      <button class="action-btn" onclick="callHelpline()">📞 Connect Women's Helpline 1091</button>
+      <button class="action-btn" onclick="alertCircle()">🔔 Alert Safety Circle Members</button>
+      <button class="action-btn" onclick="flagPattern()">🔗 Check Offender Pattern (Blockchain)</button>
+      <button class="action-btn success" onclick="resolveSelected()">✓ Mark Resolved — Person Safe</button>
+    </div>
+
+    <div class="col-section" style="flex-shrink:0;padding:10px 16px;">
+      <div class="col-label">Operation Log</div>
+    </div>
+    <div class="log-scroll" id="logScroll"></div>
+
+    <div class="chart-section">
+      <div class="col-label">Incidents by Hour (Today)</div>
+      <div class="chart-bars" id="chartBars"></div>
+      <div class="chart-xlabel" id="chartLabels"></div>
+    </div>
+  </div>
+
+</div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════════════════════
+// DATA
+// ═══════════════════════════════════════════════════════════════════════════════
+const MAP_BOUNDS = { minLat:12.88, maxLat:13.02, minLng:77.50, maxLng:77.72 };
+
+// Police units
+const POLICE_UNITS = [
+  { id:'P1', lat:12.9600, lng:77.6100, area:'Koramangala PS', status:'available' },
+  { id:'P2', lat:12.9750, lng:77.5950, area:'MG Road PS',     status:'available' },
+  { id:'P3', lat:12.9200, lng:77.6200, area:'BTM PS',         status:'patrolling' },
+  { id:'P4', lat:12.9900, lng:77.5800, area:'Cubbon Park PS', status:'available' },
+];
+
+// Seeded incidents
+let INCIDENTS = [
+  { id:'a1', type:'SOS',      status:'critical', name:'Anjali R.',  area:'Koramangala 5th Block', lat:12.9361, lng:77.6252, ts: Date.now()-180000,  responses:2, dispatchedUnit:null },
+  { id:'a2', type:'SOS',      status:'critical', name:'Kavya T.',   area:'Indiranagar 100ft Rd',  lat:12.9330, lng:77.6270, ts: Date.now()-420000,  responses:1, dispatchedUnit:null },
+  { id:'a3', type:'SOS',      status:'active',   name:'Meera P.',   area:'BTM Layout 2nd Stage',  lat:12.9141, lng:77.6101, ts: Date.now()-900000,  responses:3, dispatchedUnit:'P3' },
+  { id:'a4', type:'Incident', status:'active',   name:'Anonymous',  area:'MG Road Metro',         lat:12.9716, lng:77.5946, ts: Date.now()-3600000, responses:0, dispatchedUnit:null },
+  { id:'a5', type:'Incident', status:'resolved', name:'Sneha K.',   area:'Jayanagar 4th Block',   lat:12.9250, lng:77.5938, ts: Date.now()-7200000, responses:4, dispatchedUnit:'P2' },
+];
+
+// Circle members on map
+const CIRCLE_MEMBERS = [
+  { lat:12.9352, lng:77.6245, name:'Priya S.' },
+  { lat:12.9380, lng:77.6210, name:'Riya B.' },
+  { lat:12.9370, lng:77.6260, name:'Divya M.' },
+  { lat:12.9791, lng:77.5912, name:'Sneha K.' },
+];
+
+let selectedIncident = null;
+let canvas, ctx, W, H;
+let animFrame = 0;
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// CANVAS MAP
+// ═══════════════════════════════════════════════════════════════════════════════
+function initCanvas() {
+  canvas = document.getElementById('dashMap');
+  const col = document.getElementById('mapCol');
+  W = col.clientWidth; H = col.clientHeight;
+  canvas.width = W; canvas.height = H;
+  ctx = canvas.getContext('2d');
+  animateMap();
+  window.addEventListener('resize', () => {
+    W = col.clientWidth; H = col.clientHeight;
+    canvas.width = W; canvas.height = H;
+  });
+  canvas.addEventListener('click', onMapClick);
+}
+
+function toXY(lat, lng) {
+  const pad = 50;
+  return {
+    x: pad + ((lng - MAP_BOUNDS.minLng) / (MAP_BOUNDS.maxLng - MAP_BOUNDS.minLng)) * (W - pad*2),
+    y: (H-pad) - ((lat - MAP_BOUNDS.minLat) / (MAP_BOUNDS.maxLat - MAP_BOUNDS.minLat)) * (H - pad*2),
+  };
+}
+
+function animateMap() {
+  animFrame++;
+  drawDashMap();
+  requestAnimationFrame(animateMap);
+}
+
+function drawDashMap() {
+  ctx.clearRect(0, 0, W, H);
+
+  // BG gradient
+  const bg = ctx.createRadialGradient(W/2, H/2, 0, W/2, H/2, Math.max(W,H)*0.7);
+  bg.addColorStop(0, 'rgba(0,20,40,0.95)');
+  bg.addColorStop(1, 'rgba(2,5,7,1)');
+  ctx.fillStyle = bg; ctx.fillRect(0,0,W,H);
+
+  // Grid
+  ctx.strokeStyle = 'rgba(0,180,255,0.04)'; ctx.lineWidth = 1;
+  for (let lat=12.88; lat<=13.02; lat+=0.015) {
+    const {y} = toXY(lat, MAP_BOUNDS.minLng);
+    ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y); ctx.stroke();
+  }
+  for (let lng=77.50; lng<=77.72; lng+=0.02) {
+    const {x} = toXY(MAP_BOUNDS.minLat, lng);
+    ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,H); ctx.stroke();
+  }
+
+  // Area labels
+  const areas = [
+    {lat:12.9352,lng:77.6245,label:'KORAMANGALA'},{lat:12.9716,lng:77.5946,label:'MG ROAD'},
+    {lat:12.9610,lng:77.6387,label:'INDIRANAGAR'},{lat:12.9141,lng:77.6101,label:'BTM LAYOUT'},
+    {lat:12.9250,lng:77.5938,label:'JAYANAGAR'}, {lat:12.9791,lng:77.5912,label:'CUBBON PARK'},
+    {lat:12.9850,lng:77.5533,label:'RAJAJINAGAR'},{lat:12.9591,lng:77.6972,label:'MARATHAHALLI'},
+  ];
+  ctx.font = '500 9px JetBrains Mono'; ctx.textAlign = 'center'; ctx.fillStyle = 'rgba(0,180,255,0.2)';
+  areas.forEach(a => { const {x,y}=toXY(a.lat,a.lng); ctx.fillText(a.label,x,y); });
+
+  // Circle members (purple dots)
+  CIRCLE_MEMBERS.forEach(m => {
+    const {x,y} = toXY(m.lat, m.lng);
+    ctx.beginPath(); ctx.arc(x,y,4,0,Math.PI*2);
+    ctx.fillStyle = 'rgba(168,85,247,0.8)'; ctx.fill();
+    ctx.strokeStyle = 'rgba(168,85,247,0.4)'; ctx.lineWidth = 1.5; ctx.stroke();
+  });
+
+  // Police units (cyan diamonds)
+  POLICE_UNITS.forEach(p => {
+    const {x,y} = toXY(p.lat, p.lng);
+    const s = 8;
+    ctx.beginPath();
+    ctx.moveTo(x, y-s); ctx.lineTo(x+s,y); ctx.lineTo(x,y+s); ctx.lineTo(x-s,y);
+    ctx.closePath();
+    ctx.fillStyle = p.status==='available' ? 'rgba(0,180,255,0.7)' : 'rgba(0,180,255,0.25)';
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(0,180,255,0.8)'; ctx.lineWidth = 1.5; ctx.stroke();
+
+    ctx.font = 'bold 9px JetBrains Mono'; ctx.textAlign = 'center';
+    ctx.fillStyle = 'rgba(0,180,255,0.6)'; ctx.fillText(p.id, x, y+18);
+  });
+
+  // Incidents
+  INCIDENTS.forEach(inc => {
+    if (inc.status === 'resolved') {
+      const {x,y} = toXY(inc.lat, inc.lng);
+      ctx.beginPath(); ctx.arc(x,y,5,0,Math.PI*2);
+      ctx.fillStyle = 'rgba(0,255,136,0.5)'; ctx.fill();
+      return;
+    }
+
+    const {x,y} = toXY(inc.lat, inc.lng);
+    const isCrit  = inc.status === 'critical';
+    const isSelected = selectedIncident?.id === inc.id;
+    const color   = isCrit ? '255,59,59' : '255,184,0';
+    const pulseT  = (animFrame % 120) / 120;
+    const pulse   = Math.sin(pulseT * Math.PI * 2);
+
+    // Outer glow heatmap
+    const grad = ctx.createRadialGradient(x,y,0,x,y,50+pulse*10);
+    grad.addColorStop(0, `rgba(${color},${isCrit?0.25:0.15})`);
+    grad.addColorStop(1, `rgba(${color},0)`);
+    ctx.beginPath(); ctx.arc(x,y,50+pulse*10,0,Math.PI*2);
+    ctx.fillStyle = grad; ctx.fill();
+
+    // Ripple rings (for critical SOS)
+    if (isCrit) {
+      [1.2,1.8,2.4].forEach((scale,i) => {
+        const t = ((animFrame + i*40) % 120) / 120;
+        const r = 15 + t * 35;
+        const a = (1-t) * 0.5;
+        ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2);
+        ctx.strokeStyle = `rgba(${color},${a})`;
+        ctx.lineWidth = 2; ctx.stroke();
+      });
+    }
+
+    // Core dot
+    const r = isSelected ? 11 : 8;
+    ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2);
+    ctx.fillStyle = `rgb(${color})`; ctx.fill();
+    if (isSelected) {
+      ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.stroke();
+    }
+
+    // Crosshair for selected
+    if (isSelected) {
+      ctx.strokeStyle = `rgba(${color},0.5)`; ctx.lineWidth = 1;
+      ctx.setLineDash([4,4]);
+      ctx.beginPath(); ctx.moveTo(x-30,y); ctx.lineTo(x+30,y); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(x,y-30); ctx.lineTo(x,y+30); ctx.stroke();
+      ctx.setLineDash([]);
+    }
+
+    // Dispatched line to police unit
+    if (inc.dispatchedUnit) {
+      const pu = POLICE_UNITS.find(p => p.id === inc.dispatchedUnit);
+      if (pu) {
+        const {x:px, y:py} = toXY(pu.lat, pu.lng);
+        ctx.beginPath(); ctx.moveTo(x,y); ctx.lineTo(px,py);
+        ctx.strokeStyle = 'rgba(0,180,255,0.4)'; ctx.lineWidth = 1.5;
+        ctx.setLineDash([4,4]); ctx.stroke(); ctx.setLineDash([]);
+      }
+    }
+
+    // Label
+    ctx.font = `bold 11px JetBrains Mono`; ctx.textAlign = 'center';
+    ctx.fillStyle = `rgb(${color})`;
+    ctx.fillText(inc.name, x, y - 16);
+  });
+}
+
+function onMapClick(e) {
+  const rect = canvas.getBoundingClientRect();
+  const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+  let closest = null, closestD = 9999;
+  INCIDENTS.forEach(inc => {
+    const {x,y} = toXY(inc.lat, inc.lng);
+    const d = Math.hypot(mx-x, my-y);
+    if (d < 30 && d < closestD) { closest = inc; closestD = d; }
+  });
+  if (closest) selectIncident(closest);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// INCIDENT MANAGEMENT
+// ═══════════════════════════════════════════════════════════════════════════════
+function selectIncident(inc) {
+  selectedIncident = inc;
+  document.querySelectorAll('.alert-row').forEach(r => r.classList.remove('selected'));
+  document.getElementById('ar-'+inc.id)?.classList.add('selected');
+  renderDetail(inc);
+  document.getElementById('dispatchBtn').style.display = inc.status !== 'resolved' ? 'block' : 'none';
+}
+
+function renderDetail(inc) {
+  const elapsed = Math.round((Date.now() - inc.ts) / 60000);
+  document.getElementById('detailPanel').innerHTML = `
+    <div class="detail-name">${inc.name}</div>
+    <div class="detail-sub">${inc.area} · ${inc.type} · ${inc.status.toUpperCase()}</div>
+    <div class="detail-grid">
+      <div class="detail-cell">
+        <div class="dc-label">ELAPSED TIME</div>
+        <div class="dc-val" style="color:${elapsed>10?'var(--red)':'var(--amber)'};">${elapsed}m ago</div>
+      </div>
+      <div class="detail-cell">
+        <div class="dc-label">RESPONSES</div>
+        <div class="dc-val" style="color:var(--green);">${inc.responses}</div>
+      </div>
+      <div class="detail-cell">
+        <div class="dc-label">COORDINATES</div>
+        <div class="dc-val" style="font-size:10px;">${inc.lat.toFixed(4)}, ${inc.lng.toFixed(4)}</div>
+      </div>
+      <div class="detail-cell">
+        <div class="dc-label">UNIT ASSIGNED</div>
+        <div class="dc-val" style="color:var(--cyan);">${inc.dispatchedUnit || 'NONE'}</div>
+      </div>
+    </div>
+  `;
+  document.getElementById('actionBtns').style.display = 'flex';
+}
+
+function renderAlertsList() {
+  const list = document.getElementById('alertsList');
+  list.innerHTML = '';
+  const sorted = [...INCIDENTS].sort((a,b) => {
+    const order = { critical:0, active:1, resolved:2 };
+    return (order[a.status]||1) - (order[b.status]||1);
+  });
+
+  sorted.forEach(inc => {
+    const elapsed = Math.round((Date.now() - inc.ts) / 60000);
+    const div = document.createElement('div');
+    div.className = `alert-row ${inc.status}`;
+    div.id = 'ar-' + inc.id;
+    div.onclick = () => selectIncident(inc);
+    div.innerHTML = `
+      <div class="ar-name">${inc.name}</div>
+      <div class="ar-area">${inc.area}</div>
+      <div class="ar-time">${elapsed < 60 ? elapsed+'m ago' : Math.round(elapsed/60)+'h ago'} · ${inc.responses} responses</div>
+      <span class="ar-badge ${inc.status}">${inc.status.toUpperCase()}</span>
+    `;
+    list.appendChild(div);
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ACTIONS
+// ═══════════════════════════════════════════════════════════════════════════════
+function dispatchPolice() {
+  if (!selectedIncident) return;
+  const nearest = POLICE_UNITS.find(p => p.status === 'available');
+  if (!nearest) { addLog('crit', 'No available units — all deployed'); return; }
+
+  nearest.status = 'dispatched';
+  selectedIncident.dispatchedUnit = nearest.id;
+  INCIDENTS = INCIDENTS.map(i => i.id === selectedIncident.id ? selectedIncident : i);
+  renderDetail(selectedIncident);
+  renderAlertsList();
+  addLog('info', `Unit ${nearest.id} dispatched → ${selectedIncident.area}`);
+  addLog('ok', `ETA ~${3+Math.floor(Math.random()*5)} min · Unit ${nearest.id} en route`);
+  document.getElementById('kpiAvg').textContent = '3.8m';
+}
+
+function callHelpline() {
+  if (!selectedIncident) return;
+  addLog('info', `Helpline 1091 connected for ${selectedIncident.name}`);
+  addLog('ok', 'Counsellor assigned — call active');
+}
+
+function alertCircle() {
+  if (!selectedIncident) return;
+  addLog('info', `Safety Circle alerted — ${selectedIncident.area}`);
+  addLog('ok', '6 nearby members notified via push + SMS');
+  selectedIncident.responses += 2;
+  INCIDENTS = INCIDENTS.map(i => i.id === selectedIncident.id ? selectedIncident : i);
+  renderDetail(selectedIncident);
+  renderAlertsList();
+}
+
+function flagPattern() {
+  if (!selectedIncident) return;
+  addLog('info', 'Querying blockchain incident registry...');
+  setTimeout(() => {
+    addLog('crit', `⚠ 3 prior incidents in ${selectedIncident.area} — PATTERN DETECTED`);
+    addLog('info', 'Incident hash logged on Polygon testnet');
+    addLog('ok', 'Pattern report forwarded to Women\'s Cell');
+  }, 1200);
+}
+
+function resolveSelected() {
+  if (!selectedIncident) return;
+  selectedIncident.status = 'resolved';
+  INCIDENTS = INCIDENTS.map(i => i.id === selectedIncident.id ? selectedIncident : i);
+  const active = INCIDENTS.filter(i => i.status !== 'resolved').length;
+  document.getElementById('kpiSOS').textContent = Math.max(0, active);
+  document.getElementById('kpiResolved').textContent = parseInt(document.getElementById('kpiResolved').textContent)+1;
+  addLog('ok', `✓ ${selectedIncident.name} confirmed safe — case closed`);
+  document.getElementById('actionBtns').style.display = 'none';
+  document.getElementById('dispatchBtn').style.display = 'none';
+  renderAlertsList();
+  selectIncident(selectedIncident);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// LOG + CHART
+// ═══════════════════════════════════════════════════════════════════════════════
+function addLog(type, msg) {
+  const scroll = document.getElementById('logScroll');
+  const now = new Date();
+  const ts = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`;
+  const entry = document.createElement('div');
+  entry.className = `log-entry ${type}`;
+  entry.innerHTML = `<span class="log-time">${ts}</span>${msg}`;
+  scroll.insertBefore(entry, scroll.firstChild);
+  if (scroll.children.length > 40) scroll.lastChild.remove();
+}
+
+function renderChart() {
+  // Incidents per 2-hour block
+  const data = [0,1,0,0,1,2,4,6,3,2,5,8];
+  const labels = ['00','02','04','06','08','10','12','14','16','18','20','22'];
+  const maxVal = Math.max(...data);
+  const bars = document.getElementById('chartBars');
+  const xlabels = document.getElementById('chartLabels');
+  bars.innerHTML = ''; xlabels.innerHTML = '';
+
+  const currentHour = new Date().getHours();
+  data.forEach((v, i) => {
+    const barH = v === 0 ? 4 : (v / maxVal) * 46;
+    const isPeak = v === maxVal;
+    const isCurrent = Math.floor(currentHour / 2) === i;
+    const bar = document.createElement('div');
+    bar.className = 'bar' + (isPeak ? ' peak' : '');
+    bar.style.height = barH + 'px';
+    if (isCurrent) bar.style.borderColor = 'rgba(0,180,255,0.8)';
+    bars.appendChild(bar);
+
+    const lbl = document.createElement('div');
+    lbl.className = 'bar-label';
+    lbl.textContent = labels[i];
+    xlabels.appendChild(lbl);
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// WEBSOCKET
+// ═══════════════════════════════════════════════════════════════════════════════
+function connectWS() {
+  if (typeof io === 'undefined') {
+    addLog('info', 'WebSocket lib unavailable — demo mode only');
+    return;
+  }
+  try {
+    const socket = io('http://localhost:3001', { transports:['websocket'], timeout: 3000 });
+    socket.on('connect', () => addLog('ok', 'Connected to SafeGuard backend'));
+    socket.on('sos:triggered', (alert) => {
+      const inc = {
+        id: alert.sosId, type:'SOS', status:'critical',
+        name: alert.userName, area: 'Live SOS',
+        lat: alert.location.lat, lng: alert.location.lng,
+        ts: Date.now(), responses:0, dispatchedUnit:null,
+      };
+      INCIDENTS.unshift(inc);
+      document.getElementById('kpiSOS').textContent =
+        INCIDENTS.filter(i => i.status!=='resolved').length;
+      renderAlertsList();
+      addLog('crit', `🚨 NEW SOS: ${alert.userName} — ${alert.location.lat.toFixed(4)}, ${alert.location.lng.toFixed(4)}`);
+    });
+    socket.on('circle:sos_alert', (alert) => {
+      addLog('crit', `🔴 CIRCLE SOS: ${alert.userName} → ${alert.nearbyCount} members alerted`);
+    });
+    socket.on('sos:cancelled', ({ sosId }) => {
+      INCIDENTS = INCIDENTS.map(i => i.id === sosId ? {...i, status:'resolved'} : i);
+      renderAlertsList(); addLog('ok', `SOS ${sosId} — person confirmed safe`);
+    });
+  } catch(e) {
+    addLog('info', 'Backend offline — running in demo mode');
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// CLOCK + INIT
+// ═══════════════════════════════════════════════════════════════════════════════
+function updateClock() {
+  const n = new Date();
+  document.getElementById('clock').textContent =
+    `${String(n.getHours()).padStart(2,'0')}:${String(n.getMinutes()).padStart(2,'0')}:${String(n.getSeconds()).padStart(2,'0')}`;
+}
+
+// Simulate live incoming alerts for demo
+function startLiveDemo() {
+  setTimeout(() => addLog('info', 'System initialised — 4 police units connected'), 800);
+  setTimeout(() => addLog('crit', '🚨 SOS active: Anjali R. — Koramangala'), 2000);
+  setTimeout(() => addLog('info', 'Safety Circle alerted — 6 members notified'), 3500);
+  setTimeout(() => addLog('ok', 'Unit P1 available — 2.1km from incident'), 5000);
+  setTimeout(() => addLog('info', 'Blockchain: incident logged on Polygon testnet'), 7000);
+}
+
+window.addEventListener('load', () => {
+  // Small delay ensures grid layout is painted and col has real dimensions
+  setTimeout(() => {
+    initCanvas();
+  }, 50);
+  renderAlertsList();
+  renderChart();
+  connectWS();
+  startLiveDemo();
+  updateClock();
+  setInterval(updateClock, 1000);
+  setInterval(renderAlertsList, 30000);
+
+  // Auto-select first critical incident
+  setTimeout(() => selectIncident(INCIDENTS[0]), 1000);
+});
+</script>
+</body>
+</html>

@@ -1,77 +1,179 @@
-# SafeGuard SOS: Real-Time Women's Safety Network with Shake-Triggered Alerts, Live Tracking & Multi-Channel Coordination
+# techFest
 
-## Problem Statement
-In emergency situations, especially related to women's personal safety, victims often struggle to get timely help due to delays in communication, lack of real-time location sharing, and limited coordination between nearby people and authorities. Many existing safety applications only send alerts to a few pre-set contacts and do not provide a system that connects community members, nearby helpers, or response teams in a coordinated way. As a result, valuable time is lost during critical moments when immediate support could prevent harm.
+Women's development project for secure root
 
-## Solution: SafeGuard SOS
-SafeGuard SOS is a full-stack, mobile-first emergency response platform designed to enable faster, more coordinated assistance during crises. It broadcasts real-time situation data to trusted contacts and provides a monitoring interface, dramatically reducing response time.
+# 🚨 SafeGuard SOS — TachFest26
 
-### Key Features
-- **Shake-to-SOS Detection**: 3 quick shakes trigger emergency mode with a 5-second visible countdown and cancel option.
-- **Automatic Audio Recording & Silent Mode**: Captures surroundings discreetly.
-- **Real-Time GPS Location Streaming**: Updates every 30 seconds via WebSockets for live tracking.
-- **Multi-Channel Alerts**: Instant SMS and WhatsApp notifications to emergency contacts using Twilio.
-- **Live Web Tracking Dashboard** (`track.html`): Displays location trail, updates, and status for monitors/authorities.
-- **Fake Incoming Call Screen**: Disguise feature for distraction in dangerous situations.
-- **Direct Emergency Dialing**: One-tap calls to Indian emergency numbers (100 / 1091).
-- **Offline Fallback & Mock Modes**: Works without internet; includes demo/testing modes for quick showcases.
+### Women's Safety Emergency Alert System
 
-## Tech Stack
-- **Frontend/Mobile**: React Native (Expo) – Cross-platform app with shake detection and UI.
-- **Backend**: Node.js + Express + Socket.io – Handles real-time location streaming and alerts.
-- **Notifications**: Twilio API – SMS & WhatsApp integration.
-- **Other**: WebSocket for live updates, Google Maps/Leaflet potential for dashboard, Expo sensors for shake/gps.
+A full-stack SOS system: **React Native app → Node.js backend → Live tracking web UI**
 
-## Quick Setup & Run Instructions
-1. **Clone the repo**:
+---
 
-   git clone https://github.com/HackIndiaXYZ/openclaw-hackathon-hackindia-sandhya.git
+## Why SafeGuard?
+> **According to the NCRB 2024 Report, there were ~4.45 lakh reported crimes against women in India.**
+> Faster emergency response and real-time verifiable alerts can save lives. SafeGuard SOS reduces response times by directly routing alerts to mock "Nearby Helpers" and assigning "High Priority" AI-based scoring to severe events.
 
-   cd openclaw-hackathon-hackindia-sandhya
+---
 
-3. **Backend** (adjust path if your structure differs):
+## 📸 Screenshots
 
-   npm install
+| SOS Trigger Screen (Countdown) | Live Tracking Dashboard (Web) | Fake Call (Deescalation) |
+| :----------------------------: | :---------------------------: | :----------------------: |
+| ![SOS Screen](docs/placeholder1.png) | ![Dashboard](docs/placeholder2.png) | ![Fake Call](docs/placeholder3.png) |
 
-   node server.js    #or  npm start
+*(Note: Create a `docs` folder and replace with actual screenshots before submission!)*
 
-5. **Mobile App** (Expo):
+---
 
-   npm install -g expo-cli   # if not installed
+## Architecture
 
-   cd frontend   # or your app folder
+```
+┌─────────────────────────────────────────────────────┐
+│                  MOBILE APP (Expo)                   │
+│  Shake 3× → SOS triggered → Audio recording starts  │
+│  Location streams every 30s via REST                 │
+└──────────────────────┬──────────────────────────────┘
+                       │ HTTP + WebSocket
+┌──────────────────────▼──────────────────────────────┐
+│              BACKEND (Node.js + Socket.io)           │
+│  POST /api/sos/trigger  → SMS + WhatsApp via Twilio  │
+│  POST /api/sos/location → broadcasts to trackers     │
+│  GET  /api/sos/track/:id → public tracking page      │
+└──────────────────────┬──────────────────────────────┘
+                       │ Real-time WebSocket
+┌──────────────────────▼──────────────────────────────┐
+│           TRACKING PAGE (track.html)                 │
+│  Emergency contacts open link → see live location    │
+│  Location trail, quick-call buttons, share link      │
+└─────────────────────────────────────────────────────┘
+```
 
-   expo start
+---
 
-Scan QR with Expo Go or run on emulator.
+## Quick Start (Hackathon Mode — 20 mins)
 
-4. **Access Dashboard**: Open `track.html` in browser (update WebSocket URL to match your backend server if needed).
+### 1. Backend
 
-5. **Environment Variables**: Create `.env` with Twilio credentials (SID, Token, Phone) – **do NOT commit real keys!**
+```bash
+cd techFest
+npm install
+cp .env.example .env
+# Edit .env — leave Twilio fields blank for MOCK mode (no real SMS)
+node server.js
+```
 
-Full demo flow: Shake device → countdown → alerts sent → live location appears on dashboard → cancel confirms safety.
-![Shake Detection Demo1](screenshots/shake-demo.png)
-![Shake Detection Demo2](screenshots/shake-demo.png)
-![Shake Detection Demo3](screenshots/shake-demo.png)
-![Community](screenshots/dashboard.png)
+Backend runs at `http://localhost:3001`
+Mock mode logs SMS to the console instead of sending real messages.
 
-## Demo Video
-[Watch the 2-minute demo here](https://youtu.be/YOUR_VIDEO_ID_HERE)  
+### 2. Mobile App
 
-## Development Notes
-- Core architecture, SOS trigger, location streaming, Twilio alerts, and dashboard built over the past month.
-- Enhanced during OpenClaw Hackathon sprint: Real-time optimizations, UI polish, mock modes for judges, README/documentation, and quick-deploy setup.
-- Project is fully functional as an MVP with real-world deployment potential.
+```bash
+cd techFest/sos-app
+# (Ensure you are in the sos-app directory)
+npm install
+npx expo start
+```
 
-## Impact & Scalability
-- **Impact**: Empowers women and individuals in India by bridging the gap between victims, trusted contacts, community helpers, and authorities — potentially saving lives through seconds-faster response.
-- **Scalability**: Mobile-first, uses cloud-friendly tech (Socket.io, Twilio), offline support, and extensible to community circles or AI threat detection.
-- **Future Plans**: Add geo-fenced nearby helper notifications, basic ML for auto-emergency classification, blockchain for tamper-proof alert logs, production database (MongoDB/Firebase).
+- Scan QR with Expo Go app (iOS/Android)
+- Edit `App.js` line 21: set `API_URL` to your machine's local IP
+  ```js
+  const API_URL = "http://192.168.x.x:3001"; // your LAN IP
+  ```
+- Edit `USER` and `EMERGENCY_CONTACTS` constants with real data
 
-## License
-MIT License (see LICENSE file)
+### 3. Live Tracking Page
 
-Built for **OpenClaw Hackathon – HackIndia 2026**  
-Team: Sandhya Chandel  
-Contact: @SandhyaChandel5 on X
+Open `techFest/public/track.html` in a browser, or serve it:
 
+```bash
+# Backend already serves it at:
+http://localhost:3001/track/DEMO_SOS
+```
+
+---
+
+## SOS Flow (End to End)
+
+```
+1. User shakes phone 3 times
+2. 5-second countdown appears (tap to cancel)
+3. If not cancelled:
+   ├── Audio recording starts
+   ├── POST /api/sos/trigger (lat, lng, contacts)
+   │   ├── SMS sent: "EMERGENCY! Priya needs help! Link: ..."
+   │   └── WhatsApp sent to all contacts
+   ├── Location updates every 30s → POST /api/sos/location
+   └── WebSocket broadcasts → tracking page updates in real time
+4. Contact opens link → sees live location trail
+5. User reaches safety → taps CANCEL
+   ├── POST /api/sos/cancel
+   ├── SMS: "Priya is safe now"
+   └── Tracking page shows resolved
+```
+
+---
+
+## Feature Checklist
+
+| Feature                | Status | File                    |
+| ---------------------- | ------ | ----------------------- |
+| SOS button (tap)       | ✅     | App.js                  |
+| Shake detection (3×)   | ✅     | App.js                  |
+| 5s countdown + cancel  | ✅     | App.js                  |
+| SMS alert (Twilio)     | ✅     | server.js               |
+| WhatsApp alert         | ✅     | server.js               |
+| Live location stream   | ✅     | App.js + server.js      |
+| Audio recording        | ✅     | App.js                  |
+| Fake call screen       | ✅     | App.js                  |
+| Call 100 / 1091        | ✅     | App.js                  |
+| Live tracking web UI   | ✅     | track.html              |
+| WebSocket real-time    | ✅     | server.js + track.html  |
+| Location trail log     | ✅     | track.html              |
+| Silent mode (no alarm) | ✅     | shake trigger is silent |
+| Offline SMS fallback   | ✅     | App.js fallbackSMS()    |
+| AI Priority Alerts     | ✅     | server.js / track.html  |
+| Nearby Helpers Mock    | ✅     | server.js / track.html  |
+
+---
+
+## Twilio Setup (for real SMS — 5 min)
+
+1. Create free account at [twilio.com](https://twilio.com)
+2. Get a trial number (works for hackathon demos)
+3. Add to `.env`:
+   ```
+   TWILIO_SID=ACxxxxxxxxxx
+   TWILIO_TOKEN=your_token
+   TWILIO_FROM=+1415xxxxxxx
+   ```
+4. For WhatsApp: enable sandbox at `console.twilio.com → Messaging → WhatsApp`
+
+---
+
+## Demo Script (for judges)
+
+1. **Show the app** — point out SOS button, explain shake trigger
+2. **Open tracking page** in browser (show on laptop screen)
+3. **Trigger SOS** from phone → watch SMS log in terminal + page update. Highlight "Helpers Notified" and "High Priority" features.
+4. **Show location trail** updating in real time
+5. **Demo fake call** — "Mom" calling with ringing mock
+6. **Cancel SOS** → show "safe" confirmation
+
+---
+
+## Future Plans (Day 2+ Extensions)
+
+- **Blockchain Logging**: Log incident hashes to Polygon testnet for verifiable public records (`IncidentRegistry.sol`).
+- **Real Helper Dispatch**: Instead of mocking helpers, query nearby active user nodes and dispatch push notifications via React Native Firebase.
+- **Advanced Audio Analysis**: Use onboard AI model to classify screams or crashes to auto-trigger SOS without shaking.
+
+---
+
+## Stack
+
+- **Mobile**: React Native + Expo
+- **Backend**: Node.js + Express + Socket.io
+- **SMS/WhatsApp**: Twilio
+- **Maps**: Google Maps JS API (key needed) / OpenStreetMap fallback
+- **Blockchain (future plan)**: Polygon + Solidity + ethers.js

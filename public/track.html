@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>🚨 SafeGuard — Live Tracking</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Sora:wght@300;400;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.min.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --red:    #FF1744;
+    --red-dim: rgba(255,23,68,0.15);
+    --green:  #69f0ae;
+    --bg:     #080808;
+    --surface:#121212;
+    --border: rgba(255,255,255,0.07);
+    --text:   #e0e0e0;
+    --muted:  #666;
+    --mono:   'Space Mono', monospace;
+    --sans:   'Sora', sans-serif;
+  }
+
+  html, body { height: 100%; background: var(--bg); color: var(--text); font-family: var(--sans); }
+
+  /* ─── Pulse ring around SOS badge ─── */
+  @keyframes pulse-ring {
+    0%   { transform: scale(1);   opacity: 0.8; }
+    100% { transform: scale(2.4); opacity: 0; }
+  }
+  @keyframes blink { 50% { opacity: 0.4; } }
+  @keyframes slide-in {
+    from { transform: translateY(-16px); opacity: 0; }
+    to   { transform: translateY(0);     opacity: 1; }
+  }
+
+  /* ─── Layout ─── */
+  .app { display: flex; flex-direction: column; height: 100vh; }
+
+  /* ─── Topbar ─── */
+  .topbar {
+    display: flex; align-items: center; gap: 16px;
+    padding: 16px 24px; border-bottom: 1px solid var(--border);
+    background: var(--surface);
+    animation: slide-in 0.4s ease;
+  }
+  .sos-badge {
+    position: relative; display: flex; align-items: center; justify-content: center;
+    width: 44px; height: 44px;
+  }
+  .sos-badge-ring {
+    position: absolute; inset: 0; border-radius: 50%;
+    border: 2px solid var(--red);
+    animation: pulse-ring 1.4s cubic-bezier(0.2,0,0.8,1) infinite;
+  }
+  .sos-badge-inner {
+    width: 36px; height: 36px; border-radius: 50%;
+    background: var(--red); display: flex; align-items: center; justify-content: center;
+    font-size: 14px; font-weight: 700; letter-spacing: 0.5px; z-index: 1;
+    font-family: var(--mono);
+  }
+  .topbar-info { flex: 1; }
+  .topbar-name  { font-size: 17px; font-weight: 700; color: #fff; }
+  .topbar-status {
+    font-size: 12px; color: var(--red); font-family: var(--mono);
+    animation: blink 1.2s infinite;
+  }
+  .topbar-time  { font-size: 11px; color: var(--muted); margin-top: 2px; font-family: var(--mono); }
+  .call-btn {
+    background: var(--green); color: #000; border: none; border-radius: 24px;
+    padding: 10px 20px; font-size: 13px; font-weight: 700; cursor: pointer;
+    font-family: var(--sans); text-decoration: none; display: inline-flex; align-items: center; gap: 6px;
+  }
+  .call-btn:hover { filter: brightness(1.1); }
+
+  /* ─── Main content ─── */
+  .main { display: flex; flex: 1; overflow: hidden; }
+
+  /* ─── Map ─── */
+  .map-container { flex: 1; position: relative; background: #0a0a0a; }
+  #map { width: 100%; height: 100%; }
+  .map-placeholder {
+    width: 100%; height: 100%; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 16px; color: var(--muted);
+  }
+  .map-placeholder svg { opacity: 0.3; }
+  .map-placeholder p { font-size: 13px; text-align: center; line-height: 1.8; }
+  .map-coordinates {
+    position: absolute; bottom: 20px; left: 20px;
+    background: rgba(8,8,8,0.85); backdrop-filter: blur(8px);
+    border: 1px solid var(--border); border-radius: 12px;
+    padding: 12px 16px; font-family: var(--mono); font-size: 12px;
+    color: var(--green);
+  }
+
+  /* ─── Sidebar ─── */
+  .sidebar {
+    width: 320px; border-left: 1px solid var(--border);
+    background: var(--surface); overflow-y: auto;
+    display: flex; flex-direction: column;
+  }
+  .sidebar-section { padding: 20px 24px; border-bottom: 1px solid var(--border); }
+  .sidebar-label {
+    font-size: 10px; font-weight: 600; color: var(--muted);
+    letter-spacing: 1.5px; text-transform: uppercase; margin-bottom: 14px;
+    font-family: var(--mono);
+  }
+
+  /* Location card */
+  .location-card {
+    background: var(--red-dim); border: 1px solid rgba(255,23,68,0.3);
+    border-radius: 16px; padding: 16px;
+  }
+  .location-card .lat-lng {
+    font-family: var(--mono); font-size: 15px; color: var(--red); font-weight: 700;
+    margin-bottom: 8px;
+  }
+  .location-card .updated {
+    font-size: 11px; color: var(--muted); font-family: var(--mono);
+  }
+  .location-card .open-maps {
+    display: inline-block; margin-top: 12px;
+    font-size: 12px; color: var(--green); text-decoration: none;
+    border: 1px solid rgba(105,240,174,0.3); border-radius: 8px;
+    padding: 6px 12px; font-family: var(--mono);
+  }
+  .location-card .open-maps:hover { background: rgba(105,240,174,0.08); }
+
+  /* Trail log */
+  .trail-log { display: flex; flex-direction: column; gap: 10px; }
+  .trail-item {
+    display: flex; align-items: flex-start; gap: 12px;
+    animation: slide-in 0.3s ease;
+  }
+  .trail-dot {
+    width: 8px; height: 8px; border-radius: 50%; background: var(--red);
+    margin-top: 4px; flex-shrink: 0;
+  }
+  .trail-dot.old { background: var(--muted); }
+  .trail-coords { font-family: var(--mono); font-size: 12px; color: var(--text); }
+  .trail-time   { font-family: var(--mono); font-size: 10px; color: var(--muted); margin-top: 2px; }
+
+  /* Actions */
+  .actions-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .action-card {
+    background: #1a1a1a; border: 1px solid var(--border); border-radius: 14px;
+    padding: 16px 14px; text-align: center; cursor: pointer;
+    transition: background 0.2s, border-color 0.2s; text-decoration: none;
+    display: block;
+  }
+  .action-card:hover { background: #222; border-color: rgba(255,255,255,0.15); }
+  .action-card .icon { font-size: 22px; margin-bottom: 6px; }
+  .action-card .label { font-size: 12px; color: var(--muted); font-weight: 500; }
+  .action-card.danger { border-color: rgba(255,23,68,0.3); }
+  .action-card.danger .label { color: var(--red); }
+
+  /* Status bar */
+  .status-bar {
+    padding: 12px 24px; background: rgba(105,240,174,0.06);
+    border-top: 1px solid var(--border);
+    font-size: 12px; color: var(--green); font-family: var(--mono);
+    text-align: center;
+  }
+
+  @media (max-width: 640px) {
+    .sidebar { display: none; }
+    .topbar { padding: 12px 16px; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- Topbar -->
+  <div class="topbar">
+    <div class="sos-badge">
+      <div class="sos-badge-ring"></div>
+      <div class="sos-badge-inner">SOS</div>
+    </div>
+    <div class="topbar-info">
+      <div class="topbar-name" id="userName">Loading...</div>
+      <div class="topbar-status">🔴 LIVE — EMERGENCY ALERT ACTIVE</div>
+      <div class="topbar-time" id="alertTime">—</div>
+    </div>
+    <a class="call-btn" id="callBtn" href="#">📞 Call Now</a>
+  </div>
+
+  <!-- Main -->
+  <div class="main">
+
+    <!-- Map -->
+    <div class="map-container">
+      <div class="map-placeholder" id="mapPlaceholder">
+        <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#FF1744" stroke-width="1.5">
+          <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/>
+          <circle cx="12" cy="10" r="3"/>
+        </svg>
+        <p>Live map will appear here<br>when Google Maps API key is added.<br><br>
+          <code style="color:var(--red);font-size:11px">Add your key to the script tag below</code>
+        </p>
+      </div>
+      <div class="map-coordinates" id="coordsOverlay">📍 Waiting for location...</div>
+    </div>
+
+    <!-- Sidebar -->
+    <div class="sidebar">
+
+      <!-- Current location -->
+      <div class="sidebar-section">
+        <div class="sidebar-label">Current Location</div>
+        <div class="location-card">
+          <div class="lat-lng" id="latLng">—, —</div>
+          <div class="updated" id="lastUpdated">Waiting for update...</div>
+          <a class="open-maps" id="openMapsLink" href="#" target="_blank">↗ Open in Google Maps</a>
+        </div>
+      </div>
+
+      <!-- Location trail -->
+      <div class="sidebar-section" style="flex:1">
+        <div class="sidebar-label">Location Trail</div>
+        <div class="trail-log" id="trailLog">
+          <div style="color:var(--muted);font-size:13px">Waiting for location updates...</div>
+        </div>
+      </div>
+
+      <!-- Quick actions -->
+      <div class="sidebar-section">
+        <div class="sidebar-label">Quick Actions</div>
+        <div class="actions-grid">
+          <a class="action-card danger" href="tel:100">
+            <div class="icon">🚔</div>
+            <div class="label">Call Police (100)</div>
+          </a>
+          <a class="action-card danger" href="tel:1091">
+            <div class="icon">🆘</div>
+            <div class="label">Women's Helpline</div>
+          </a>
+          <a class="action-card" id="shareBtn" href="#">
+            <div class="icon">🔗</div>
+            <div class="label">Share This Link</div>
+          </a>
+          <a class="action-card" id="screenshotBtn" href="#">
+            <div class="icon">📸</div>
+            <div class="label">Save Screenshot</div>
+          </a>
+        </div>
+      </div>
+
+      <!-- Status -->
+      <div class="status-bar" id="statusBar">🟢 Connected — Receiving live updates</div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+  // ─── Config ──────────────────────────────────────────────────────────────
+  const API_URL = 'http://localhost:3001'; // change to your backend URL
+  const sosId   = window.location.pathname.split('/track/')[1] || 'DEMO_SOS';
+
+  // ─── State ────────────────────────────────────────────────────────────────
+  let currentLocation = null;
+  let locationTrail   = [];
+  let userName        = 'Unknown';
+  let userPhone       = '';
+
+  // ─── Helpers ──────────────────────────────────────────────────────────────
+  const $ = id => document.getElementById(id);
+
+  function fmt(lat, lng) {
+    return `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+  }
+  function timeStr(ts) {
+    return new Date(ts).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  }
+
+  function updateLocationUI(lat, lng, ts) {
+    const coordStr = fmt(lat, lng);
+    const mapsUrl  = `https://maps.google.com/?q=${lat},${lng}`;
+
+    $('latLng').textContent        = coordStr;
+    $('coordsOverlay').textContent = `📍 ${coordStr}`;
+    $('lastUpdated').textContent   = `Updated: ${timeStr(ts || Date.now())}`;
+    $('openMapsLink').href         = mapsUrl;
+
+    // Add to trail
+    locationTrail.unshift({ lat, lng, ts: ts || Date.now() });
+    if (locationTrail.length > 20) locationTrail.pop();
+    renderTrail();
+  }
+
+  function renderTrail() {
+    const container = $('trailLog');
+    container.innerHTML = locationTrail.map((p, i) => `
+      <div class="trail-item">
+        <div class="trail-dot ${i > 0 ? 'old' : ''}"></div>
+        <div>
+          <div class="trail-coords">${fmt(p.lat, p.lng)}</div>
+          <div class="trail-time">${timeStr(p.ts)}</div>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  // ─── Fetch initial SOS data ───────────────────────────────────────────────
+  async function fetchSOSData() {
+    try {
+      const res  = await fetch(`${API_URL}/api/sos/track/${sosId}`);
+      const data = await res.json();
+
+      if (!data.active) {
+        $('statusBar').style.background = 'rgba(105,240,174,0.15)';
+        $('statusBar').textContent = '✅ SOS Resolved — Person is safe';
+        return;
+      }
+
+      userName = data.userName || 'Unknown';
+      userPhone = data.phone || '';
+      
+      let titleText = `${userName} — EMERGENCY`;
+      if(data.priority === "HIGH") {
+         titleText = `⚠️ HIGH PRIORITY — ${userName}`;
+         document.querySelector('.topbar-status').textContent = '🔴 LIVE — HIGH PRIORITY ALERT ACTIVE';
+         document.querySelector('.sos-badge-inner').style.animation = 'blink 0.5s infinite alternate';
+      }
+
+      $('userName').textContent = titleText;
+      $('alertTime').textContent = `Alert started: ${timeStr(new Date(data.startedAt))}`;
+      $('callBtn').href = `tel:${userPhone}`;
+
+      if (data.location) {
+        updateLocationUI(data.location.lat, data.location.lng, Date.now());
+      }
+      
+      if(data.helpersNotified > 0) {
+         const helpersText = ` | 👥 Nearby Helpers Notified: ${data.helpersNotified}`;
+         $('statusBar').textContent = '🟢 Connected — Receiving live updates' + helpersText;
+      }
+
+      // Populate trail from history
+      if (data.history?.length) {
+        locationTrail = data.history.slice().reverse().map(p => ({
+          lat: p.lat, lng: p.lng, ts: p.ts,
+        }));
+        renderTrail();
+      }
+    } catch (e) {
+      // Demo mode
+      $('userName').textContent = 'Priya Sharma — EMERGENCY';
+      $('alertTime').textContent = 'Alert started: ' + timeStr(Date.now() - 180000);
+      updateLocationUI(12.9716, 77.5946, Date.now() - 120000);
+      $('statusBar').textContent = '⚠️ Running in demo mode — backend not connected';
+    }
+  }
+
+  // ─── WebSocket for live updates ───────────────────────────────────────────
+  function connectWS() {
+    try {
+      const socket = io(API_URL, { 
+        transports: ['websocket'],
+        reconnection: true,             // Enable reconnection explicitly
+        reconnectionAttempts: Infinity, // Try forever
+        reconnectionDelay: 1000,        // Start with 1s
+        reconnectionDelayMax: 5000      // Max 5s between retries
+      });
+
+      socket.on('connect', () => {
+        socket.emit('track:subscribe', { sosId });
+        $('statusBar').textContent = '🟢 Connected — Receiving live updates';
+      });
+
+      socket.on('sos:location_update', ({ sosId: id, lat, lng, ts }) => {
+        if (id !== sosId) return;
+        updateLocationUI(lat, lng, ts);
+      });
+
+      socket.on('sos:cancelled', ({ sosId: id }) => {
+        if (id !== sosId) return;
+        $('statusBar').style.background = 'rgba(105,240,174,0.12)';
+        $('statusBar').textContent = '✅ SOS Cancelled — Person confirmed safe';
+        $('topbar').style.background = '#0d1a0d';
+      });
+
+      socket.on('disconnect', () => {
+        $('statusBar').textContent = '🔴 Disconnected — Reconnecting...';
+      });
+      
+      socket.on('reconnect_attempt', () => {
+        $('statusBar').textContent = '🟡 Connection lost — attempting to reconnect...';
+      });
+    } catch(e) {
+      console.log('WS unavailable, polling mode');
+      // Fallback: poll every 30s
+      setInterval(fetchSOSData, 30000);
+    }
+  }
+
+  // ─── Share button ─────────────────────────────────────────────────────────
+  $('shareBtn').addEventListener('click', e => {
+    e.preventDefault();
+    if (navigator.share) {
+      navigator.share({ title: '🚨 Emergency Alert', url: window.location.href });
+    } else {
+      navigator.clipboard?.writeText(window.location.href);
+      $('shareBtn').querySelector('.label').textContent = 'Link Copied!';
+      setTimeout(() => { $('shareBtn').querySelector('.label').textContent = 'Share This Link'; }, 2000);
+    }
+  });
+
+  // ─── Init ─────────────────────────────────────────────────────────────────
+  fetchSOSData();
+  connectWS();
+</script>
+
+<!--
+  To add real Google Maps:
+  1. Get a Maps JavaScript API key from console.cloud.google.com
+  2. Replace the placeholder div#mapPlaceholder with: <div id="map"></div>
+  3. Add this script tag:
+     <script src="https://maps.googleapis.com/maps/api/js?key=YOUR_KEY&callback=initMap" async></script>
+  4. Add initMap() function that creates a map centered on current coordinates
+     and drops a red marker that updates via updateLocationUI()
+-->
+</body>
+</html>
