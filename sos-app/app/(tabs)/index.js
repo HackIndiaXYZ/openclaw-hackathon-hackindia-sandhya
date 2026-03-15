@@ -10,6 +10,7 @@ import {
   Animated,
   Platform,
   Linking,
+  ActivityIndicator,
 } from "react-native";
 import * as Location from "expo-location";
 import { Accelerometer } from "expo-sensors";
@@ -18,7 +19,7 @@ import { Audio } from "expo-av";
 import { io } from "socket.io-client";
 
 // ─── CONFIG ──────────────────────────────────────────────────────────────────
-const API_URL = "http://192.168.0.102:3001"; // change to your backend IP
+const API_URL = "http://192.168.0.102:3001"; // USER CAN EDIT THIS TO LAN IP
 const USER = {
   id: "user_001",
   name: "Priya Sharma",
@@ -36,6 +37,7 @@ const SHAKE_WINDOW_MS = 1500;
 
 export default function HomeScreen() {
   const [sosActive, setSosActive] = useState(false);
+  const [isSending, setIsSending] = useState(false);
   const [countdown, setCountdown] = useState(null); // pre-SOS countdown
   const [fakeCallActive, setFakeCallActive] = useState(false);
   const [location, setLocation] = useState(null);
@@ -46,48 +48,70 @@ export default function HomeScreen() {
   const recordingRef = useRef(null);
   const countdownTimer = useRef(null);
   const pulseAnim = useRef(new Animated.Value(1)).current;
+  const countdownScale = useRef(new Animated.Value(2)).current;
   const shakeTimestamps = useRef([]);
   const socket = useRef(null);
 
   // ─── Setup ────────────────────────────────────────────────────────────────
   useEffect(() => {
+    let sub = null;
+
     (async () => {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== "granted") {
-        Alert.alert(
-          "Permission needed",
-          "Location permission is required for SOS.",
-        );
-        return;
+      try {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status !== "granted") {
+          if (Platform.OS !== "web") {
+             Alert.alert("Permission needed", "Location permission is required for SOS.");
+          } else {
+             console.warn("Location permission denied (web)");
+          }
+          return;
+        }
+        const loc = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.Balanced, // Safer for web/emulators
+        });
+        if (loc && loc.coords) {
+          setLocation(loc.coords);
+        }
+      } catch (e) {
+        console.warn("Location fetch error:", e);
       }
-      const loc = await Location.getCurrentPositionAsync({});
-      setLocation(loc.coords);
     })();
 
     // WebSocket connection
-    socket.current = io(API_URL);
-    socket.current.on("connect", () => console.log("WS connected"));
+    try {
+      socket.current = io(API_URL);
+      socket.current.on("connect", () => console.log("WS connected"));
+    } catch(e) {
+      console.warn("Socket connection warning:", e);
+    }
 
     // Accelerometer for shake detection
-    Accelerometer.setUpdateInterval(100);
-    const sub = Accelerometer.addListener(({ x, y, z }) => {
-      const acceleration = Math.sqrt(x * x + y * y + z * z);
-      if (acceleration > SHAKE_THRESHOLD) {
-        const now = Date.now();
-        shakeTimestamps.current.push(now);
-        // Keep only shakes within window
-        shakeTimestamps.current = shakeTimestamps.current.filter(
-          (t) => now - t < SHAKE_WINDOW_MS,
-        );
-        if (shakeTimestamps.current.length >= SHAKE_COUNT_REQUIRED) {
-          shakeTimestamps.current = [];
-          handleShakeDetected();
+    try {
+      Accelerometer.setUpdateInterval(100);
+      sub = Accelerometer.addListener(({ x, y, z }) => {
+        const acceleration = Math.sqrt(x * x + y * y + z * z);
+        if (acceleration > SHAKE_THRESHOLD) {
+          const now = Date.now();
+          shakeTimestamps.current.push(now);
+          // Keep only shakes within window
+          shakeTimestamps.current = shakeTimestamps.current.filter(
+            (t) => now - t < SHAKE_WINDOW_MS,
+          );
+          if (shakeTimestamps.current.length >= SHAKE_COUNT_REQUIRED) {
+            shakeTimestamps.current = [];
+            handleShakeDetected();
+          }
         }
-      }
-    });
+      });
+    } catch(e) {
+      console.warn("Accelerometer error:", e);
+    }
 
     return () => {
-      sub.remove();
+      if (sub && typeof sub.remove === 'function') {
+        sub.remove();
+      }
       socket.current?.disconnect();
       clearInterval(locationInterval.current);
     };
@@ -118,7 +142,7 @@ export default function HomeScreen() {
   // ─── Shake Handler ────────────────────────────────────────────────────────
   const handleShakeDetected = () => {
     if (sosActive || countdown !== null) return;
-    Vibration.vibrate([100, 50, 100]);
+    try { Vibration.vibrate([100, 50, 100]); } catch(e){}
     startCountdown();
   };
 
@@ -126,6 +150,18 @@ export default function HomeScreen() {
   const startCountdown = () => {
     let count = 5;
     setCountdown(count);
+    
+    // Scale animation helper
+    const animateTick = () => {
+       countdownScale.setValue(1.5);
+       Animated.spring(countdownScale, {
+          toValue: 1,
+          friction: 4,
+          useNativeDriver: true,
+       }).start();
+    };
+    animateTick();
+
     countdownTimer.current = setInterval(() => {
       count -= 1;
       if (count <= 0) {
@@ -134,6 +170,7 @@ export default function HomeScreen() {
         triggerSOS();
       } else {
         setCountdown(count);
+        animateTick();
       }
     }, 1000);
   };
@@ -147,10 +184,11 @@ export default function HomeScreen() {
   // ─── Core SOS Flow ───────────────────────────────────────────────────────
   const triggerSOS = async () => {
     setSosActive(true);
-    setStatusMsg("🚨 SOS ACTIVE — Alerting contacts...");
-    Vibration.vibrate(500);
+    setIsSending(true);
+    setStatusMsg("🚨 SOS TRIGGERED — Getting location & alerting...");
+    try { Vibration.vibrate([100, 200, 100, 200, 1000]); } catch(e){}
 
-    // Get fresh location
+    // Get fresh location carefully
     let coords = location;
     try {
       const loc = await Location.getCurrentPositionAsync({
@@ -159,7 +197,7 @@ export default function HomeScreen() {
       coords = loc.coords;
       setLocation(coords);
     } catch (e) {
-      console.warn("Location error:", e);
+      console.warn("Location refresh error:", e);
     }
 
     // Start audio recording (evidence)
@@ -177,17 +215,28 @@ export default function HomeScreen() {
           lat: coords?.latitude,
           lng: coords?.longitude,
           contacts: EMERGENCY_CONTACTS,
+          shakeIntensity: 3.5, // Mock value for AI Prioritization testing
+          audioDuration: 12   // Mock value for AI Prioritization testing
         }),
       });
       const data = await res.json();
       if (data.liveLink) {
-        setStatusMsg(`🚨 SOS ACTIVE\nContacts notified\nTracking link sent`);
+        let newStatus = `🚨 SOS ACTIVE\nContacts notified\nTracking link sent`;
+        if (data.priority === "HIGH") {
+           newStatus = `⚠️ HIGH PRIORITY SOS\n` + newStatus;
+        }
+        if (data.helpersNotified > 0) {
+           newStatus += `\n👥 Helpers Notified: ${data.helpersNotified}`;
+        }
+        setStatusMsg(newStatus);
       }
     } catch (e) {
       // Fallback: send SMS directly if backend unreachable
       await fallbackSMS(coords);
       setStatusMsg("🚨 SOS ACTIVE\n(SMS sent directly)");
     }
+
+    setIsSending(false);
 
     // Start pushing location updates every 30 seconds
     locationInterval.current = setInterval(pushLocationUpdate, 30000);
@@ -209,10 +258,12 @@ export default function HomeScreen() {
     } catch (e) {
       // Notify contacts manually
       const msg = `✅ ${USER.name} is safe now. SOS cancelled.`;
-      await SMS.sendSMSAsync(
-        EMERGENCY_CONTACTS.map((c) => c.phone),
-        msg,
-      );
+      try {
+        await SMS.sendSMSAsync(
+          EMERGENCY_CONTACTS.map((c) => c.phone),
+          msg,
+        );
+      } catch(smsErr) {}
     }
   };
 
@@ -220,16 +271,18 @@ export default function HomeScreen() {
   const pushLocationUpdate = async () => {
     try {
       const loc = await Location.getCurrentPositionAsync({});
-      setLocation(loc.coords);
-      await fetch(`${API_URL}/api/sos/location`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          userId: USER.id,
-          lat: loc.coords.latitude,
-          lng: loc.coords.longitude,
-        }),
-      });
+      if (loc && loc.coords) {
+         setLocation(loc.coords);
+         await fetch(`${API_URL}/api/sos/location`, {
+           method: "POST",
+           headers: { "Content-Type": "application/json" },
+           body: JSON.stringify({
+             userId: USER.id,
+             lat: loc.coords.latitude,
+             lng: loc.coords.longitude,
+           }),
+         });
+      }
     } catch (e) {
       console.warn("Location update failed:", e);
     }
@@ -258,7 +311,6 @@ export default function HomeScreen() {
       await recordingRef.current.stopAndUnloadAsync();
       const uri = recordingRef.current.getURI();
       console.log("Recording saved:", uri);
-      // In production: upload to backend with FormData
       recordingRef.current = null;
     } catch (e) {
       console.warn("Stop recording failed:", e);
@@ -267,7 +319,7 @@ export default function HomeScreen() {
 
   // ─── Fallback SMS (no internet) ───────────────────────────────────────────
   const fallbackSMS = async (coords) => {
-    const mapsLink = coords
+    const mapsLink = coords && coords.latitude && coords.longitude
       ? `https://maps.google.com/?q=${coords.latitude},${coords.longitude}`
       : "Location unavailable";
     const msg = `🚨 EMERGENCY! ${USER.name} needs help!\n📍 Location: ${mapsLink}\n📞 Call: ${USER.phone}`;
@@ -282,20 +334,30 @@ export default function HomeScreen() {
   };
 
   // ─── Fake Call ────────────────────────────────────────────────────────────
+  const fakeCallPattern = [0, 1000, 2000, 1000, 2000]; 
+  
   const triggerFakeCall = () => {
     setFakeCallActive(true);
-    Vibration.vibrate([500, 200, 500, 200, 500]);
+    try { Vibration.vibrate(fakeCallPattern, true); } catch(e){} // loop true
     // Auto-dismiss after 30s if not answered
-    setTimeout(() => setFakeCallActive(false), 30000);
+    setTimeout(() => {
+       setFakeCallActive(false);
+       try { Vibration.cancel(); } catch(e){}
+    }, 30000);
+  };
+  
+  const finishFakeCall = () => {
+     setFakeCallActive(false);
+     try { Vibration.cancel(); } catch(e){}
   };
 
   // ─── Call Police ──────────────────────────────────────────────────────────
-  const callPolice = () => Linking.openURL("tel:100");
-  const callHelpline = () => Linking.openURL("tel:1091");
+  const callPolice = () => Linking.openURL("tel:100").catch(()=>{});
+  const callHelpline = () => Linking.openURL("tel:1091").catch(()=>{});
 
   // ─── UI ──────────────────────────────────────────────────────────────────
   if (fakeCallActive) {
-    return <FakeCallScreen onDismiss={() => setFakeCallActive(false)} />;
+    return <FakeCallScreen onDismiss={finishFakeCall} />;
   }
 
   if (countdown !== null) {
@@ -303,7 +365,9 @@ export default function HomeScreen() {
       <View style={[styles.container, styles.countdownContainer]}>
         <StatusBar barStyle="light-content" backgroundColor="#1a0000" />
         <Text style={styles.countdownLabel}>SOS activating in...</Text>
-        <Text style={styles.countdownNumber}>{countdown}</Text>
+        <Animated.Text style={[styles.countdownNumber, { transform: [{ scale: countdownScale }] }]}>
+          {countdown}
+        </Animated.Text>
         <TouchableOpacity
           style={styles.cancelCountdownBtn}
           onPress={cancelCountdown}
@@ -320,8 +384,12 @@ export default function HomeScreen() {
 
       {/* Header */}
       <View style={styles.header}>
-        <View style={styles.statusDot} />
-        <Text style={styles.statusText}>{statusMsg}</Text>
+        {isSending ? (
+          <ActivityIndicator color={RED} size="small" />
+        ) : (
+          <View style={[styles.statusDot, sosActive && { backgroundColor: RED }]} />
+        )}
+        <Text style={[styles.statusText, sosActive && { color: "#fff", fontWeight: "bold" }]}>{statusMsg}</Text>
       </View>
 
       {/* SOS Button */}
@@ -332,20 +400,26 @@ export default function HomeScreen() {
             onPress={sosActive ? cancelSOS : startCountdown}
             activeOpacity={0.85}
           >
-            <Text style={styles.sosButtonLabel}>
-              {sosActive ? "CANCEL" : "SOS"}
-            </Text>
-            <Text style={styles.sosButtonSub}>
-              {sosActive ? "Tap to cancel alert" : "Shake 3× or press"}
-            </Text>
+            {isSending ? (
+               <ActivityIndicator color="#fff" size="large" />
+            ) : (
+              <>
+                <Text style={styles.sosButtonLabel}>
+                  {sosActive ? "CANCEL" : "SOS"}
+                </Text>
+                <Text style={styles.sosButtonSub}>
+                  {sosActive ? "Tap to cancel alert" : "Shake 3× or press"}
+                </Text>
+              </>
+            )}
           </TouchableOpacity>
         </Animated.View>
       </View>
 
       {/* Location */}
       <Text style={styles.locationText}>
-        {location
-          ? `📍 ${location.latitude.toFixed(5)}, ${location.longitude.toFixed(5)}`
+        {location && typeof location.latitude === "number" && typeof location.longitude === "number"
+          ? `📍 ${(location.latitude).toFixed(5)}, ${(location.longitude).toFixed(5)}`
           : "📍 Getting location..."}
       </Text>
 
@@ -399,26 +473,28 @@ function FakeCallScreen({ onDismiss }) {
     <Animated.View
       style={[fakeStyles.container, { transform: [{ translateY: slideAnim }] }]}
     >
-      <StatusBar barStyle="light-content" backgroundColor="#1c2c1c" />
+      <StatusBar barStyle="light-content" backgroundColor="#000" />
+      <View style={fakeStyles.avatar}>
+         <Text style={fakeStyles.avatarText}>M</Text>
+      </View>
       <Text style={fakeStyles.callerName}>Mom</Text>
       <Text style={fakeStyles.callerSub}>Incoming call...</Text>
-      <Text style={fakeStyles.script}>
-        "Where are you? I'm coming to pick you up right now!"
-      </Text>
+      
+      <View style={{ flex: 1 }} />
+      
       <View style={fakeStyles.buttons}>
         <TouchableOpacity
           style={[fakeStyles.callBtn, fakeStyles.decline]}
           onPress={onDismiss}
         >
-          <Text style={fakeStyles.callBtnText}>✕ Decline</Text>
+          <Text style={fakeStyles.callBtnText}>✕</Text>
+          <Text style={fakeStyles.callLabelText}>Decline</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={[fakeStyles.callBtn, fakeStyles.answer]}>
-          <Text style={fakeStyles.callBtnText}>✓ Answer</Text>
+        <TouchableOpacity style={[fakeStyles.callBtn, fakeStyles.answer]} onPress={onDismiss}>
+          <Text style={fakeStyles.callBtnText}>✓</Text>
+          <Text style={fakeStyles.callLabelText}>Answer</Text>
         </TouchableOpacity>
       </View>
-      <TouchableOpacity style={fakeStyles.dismissLink} onPress={onDismiss}>
-        <Text style={fakeStyles.dismissText}>Cancel fake call</Text>
-      </TouchableOpacity>
     </Animated.View>
   );
 }
@@ -563,38 +639,33 @@ const styles = StyleSheet.create({
 const fakeStyles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#1c2c1c",
+    backgroundColor: "#000",
     alignItems: "center",
-    justifyContent: "center",
-    padding: 40,
+    paddingTop: 80,
+    paddingBottom: 60,
   },
+  avatar: {
+    width: 100, height: 100, borderRadius: 50,
+    backgroundColor: "#333", alignItems: "center", justifyContent: "center",
+    marginBottom: 24,
+  },
+  avatarText: { color: "#aaa", fontSize: 40, fontWeight: "600" },
   callerName: {
     color: "#fff",
-    fontSize: 48,
-    fontWeight: "700",
+    fontSize: 42,
+    fontWeight: "300",
     marginBottom: 8,
   },
-  callerSub: { color: "#aaa", fontSize: 18, marginBottom: 32 },
-  script: {
-    color: "#69f0ae",
-    fontSize: 16,
-    textAlign: "center",
-    fontStyle: "italic",
-    backgroundColor: "rgba(105,240,174,0.08)",
-    padding: 20,
-    borderRadius: 16,
-    marginBottom: 60,
-  },
-  buttons: { flexDirection: "row", gap: 24 },
+  callerSub: { color: "#888", fontSize: 18, marginBottom: 32 },
+  buttons: { flexDirection: "row", gap: 60, paddingHorizontal: 40 },
   callBtn: {
-    paddingVertical: 18,
-    paddingHorizontal: 32,
-    borderRadius: 50,
-    alignItems: "center",
+    width: 72, height: 72,
+    borderRadius: 36,
+    alignItems: "center", justifyContent: "center",
+    marginBottom: 10,
   },
-  decline: { backgroundColor: "#c62828" },
-  answer: { backgroundColor: "#2e7d32" },
-  callBtnText: { color: "#fff", fontSize: 16, fontWeight: "700" },
-  dismissLink: { marginTop: 32 },
-  dismissText: { color: "#555", fontSize: 13 },
+  decline: { backgroundColor: "#FF3B30" },
+  answer: { backgroundColor: "#34C759" },
+  callBtnText: { color: "#fff", fontSize: 32, fontWeight: "500" },
+  callLabelText: { color: "#fff", fontSize: 14, marginTop: 80, textAlign: "center", position: "absolute", bottom: -24 },
 });
