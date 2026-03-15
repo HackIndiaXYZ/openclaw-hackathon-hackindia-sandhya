@@ -53,43 +53,35 @@ A full-stack SOS system: **React Native app → Node.js backend → Live trackin
 
 ## Quick Start (Hackathon Mode — 20 mins)
 
-### 1. Backend
+### 1. Backend Server
 
 ```bash
-cd techFest
 npm install
 cp .env.example .env
 # Edit .env — leave Twilio fields blank for MOCK mode (no real SMS)
 node server.js
 ```
-
 Backend runs at `http://localhost:3001`
 Mock mode logs SMS to the console instead of sending real messages.
 
-### 2. Mobile App
+### 2. Mobile App (Expo)
 
 ```bash
-cd techFest/sos-app
-# (Ensure you are in the sos-app directory)
+cd sos-app
 npm install
 npx expo start
 ```
-
-- Scan QR with Expo Go app (iOS/Android)
-- Edit `App.js` line 21: set `API_URL` to your machine's local IP
+- Edit `App.js` line 21: set `API_URL` to your machine's local network IP.
   ```js
   const API_URL = "http://192.168.x.x:3001"; // your LAN IP
   ```
-- Edit `USER` and `EMERGENCY_CONTACTS` constants with real data
+- Edit `USER` and `EMERGENCY_CONTACTS` constants with real data.
+- Scan QR with Expo Go or run on emulator.
 
 ### 3. Live Tracking Page
 
-Open `techFest/public/track.html` in a browser, or serve it:
-
-```bash
-# Backend already serves it at:
-http://localhost:3001/track/DEMO_SOS
-```
+Open `public/track.html` in a browser, or serve it at: 
+`http://localhost:3001/track/DEMO_SOS`
 
 ---
 
