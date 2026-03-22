@@ -20,7 +20,7 @@ A full-stack SOS system: **React Native app → Node.js backend → Live trackin
 
 | SOS Trigger Screen (Countdown) | Live Tracking Dashboard (Web) | Fake Call (Deescalation) |
 | :----------------------------: | :---------------------------: | :----------------------: |
-| ![SOS Screen](docs/placeholder1.png) | ![Dashboard](docs/placeholder2.png) | ![Fake Call](docs/placeholder3.png) |
+| ![SOS Screen](docs/sos.png) | ![community Dashboard](docs/circle.png) | ![Fake Call](docs/call.png) |
 
 *(Note: Create a `docs` folder and replace with actual screenshots before submission!)*
 
