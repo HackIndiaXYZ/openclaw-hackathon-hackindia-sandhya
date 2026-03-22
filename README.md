@@ -22,7 +22,6 @@ A full-stack SOS system: **React Native app → Node.js backend → Live trackin
 | :----------------------------: | :---------------------------: | :----------------------: |
 | ![SOS Screen](docs/sos.jpeg) | ![community Dashboard](docs/circle.png) | ![Fake Call](docs/call.jpeg) |
 
-*(Note: Create a `docs` folder and replace with actual screenshots before submission!)*
 
 ---
 
